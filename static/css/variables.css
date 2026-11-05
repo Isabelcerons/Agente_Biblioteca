@@ -1,0 +1,61 @@
+:root {
+  color-scheme: light;
+  --papel: #F6F1E7;
+  --superficie: #FFFDF8;
+  --verde: #1F4D3A;
+  --verde-claro: #E3EDE6;
+  --madera: #8B5E3C;
+  --laton: #C9A227;
+  --tinta: #2A2A28;
+  --gris: #6B6A64;
+  --disponible: #2E7D4F;
+  --prestado: #B54A3C;
+  --reservado: #C98A1B;
+  --disponible-texto: #23633E;
+  --prestado-texto: #9A3B2F;
+  --reservado-texto: #8A5A00;
+
+  --fondo: var(--papel);
+  --texto: var(--tinta);
+  --texto-sec: var(--gris);
+  --borde: #DDD5C7;
+  --sombra: 0 10px 28px rgb(83 55 31 / 10%);
+  --sombra-grande: 0 18px 42px rgb(83 55 31 / 17%);
+  --foco: var(--laton);
+  --boton-primario-bg: var(--verde);
+  --boton-primario-fg: var(--superficie);
+  --boton-acento-bg: var(--laton);
+  --boton-acento-fg: var(--tinta);
+  --radio: 14px;
+  --radio-lg: 16px;
+  --espacio-1: 4px;
+  --espacio-2: 8px;
+  --espacio-3: 12px;
+  --espacio-4: 16px;
+  --espacio-6: 24px;
+  --espacio-8: 32px;
+  --espacio-12: 48px;
+  --dur-rapida: 150ms;
+  --dur: 220ms;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+}
+
+[data-tema="oscuro"] {
+  color-scheme: dark;
+  --fondo: #14201B;
+  --superficie: #1C2B25;
+  --texto: #EDE6D6;
+  --texto-sec: #C6C1B5;
+  --verde-claro: #294438;
+  --borde: #43544A;
+  --sombra: 0 10px 28px rgb(0 0 0 / 24%);
+  --sombra-grande: 0 18px 42px rgb(0 0 0 / 38%);
+  --foco: #E3B84E;
+  --boton-primario-bg: #367052;
+  --boton-primario-fg: #FFFDF8;
+  --boton-acento-bg: var(--laton);
+  --boton-acento-fg: var(--tinta);
+  --disponible-texto: #6CC08F;
+  --prestado-texto: #E68A7D;
+  --reservado-texto: #E3B04B;
+}

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#123c35">
+  <title>Biblioteca UniPutumayo — Agente</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+  <!-- Micrófono provisional (Fase 5); el rediseño lo reemplaza por voz.js -->
+  <script type="module" src="/static/voz_basica.js"></script>
+  <style>
+    .mic-button { background: #8B5E3C; }
+    .mic-button.grabando { background: #B54A3C; animation: pulso 1s ease-in-out infinite; }
+    .bibliografia { margin-top: 1rem; }
+    .bibliografia h3 { margin-bottom: .5rem; }
+    .bibliografia ol { padding-left: 2em; }
+    .bibliografia li, .bibliografia-entrada { padding-left: 2em; text-indent: -2em; }
+    .bibliografia li { margin-bottom: .75rem; }
+    .bibliografia-copiar { margin-top: .5rem; }
+    .bibliografia-anuncio { margin-left: .5rem; }
+    @keyframes pulso { 50% { box-shadow: 0 0 0 8px rgb(181 74 60 / 25%); } }
+    @media (prefers-reduced-motion: reduce) { .mic-button.grabando { animation: none; } }
+  </style>
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="brand-mark" aria-hidden="true">U</div>
+      <div>
+        <p class="eyebrow">Universidad UniPutumayo</p>
+        <h1>Biblioteca UniPutumayo — Agente</h1>
+      </div>
+      <span class="status"><span class="status-dot"></span> Asistente disponible</span>
+    </header>
+
+    <!-- El espacio queda preparado para las pestañas de Mi cuenta, SQL vs pgvector,
+         Bitácora y micrófono que se implementarán en la Fase 6. -->
+    <section class="chat-card" aria-label="Conversación con el agente">
+      <div id="chat-history" class="chat-history" aria-live="polite">
+        <article class="message agent-message">
+          <div class="avatar" aria-hidden="true">B</div>
+          <div class="message-content">
+            <p>¡Hola! Puedo ayudarle a buscar materiales, consultar disponibilidad y responder preguntas de la biblioteca.</p>
+            <small>Agente de biblioteca</small>
+          </div>
+        </article>
+      </div>
+      <form id="chat-form" class="composer">
+        <label class="sr-only" for="chat-input">Escriba su mensaje</label>
+        <textarea id="chat-input" rows="1" maxlength="2000" placeholder="Escriba su mensaje…" required></textarea>
+        <button id="mic-button" class="send-button mic-button" type="button" aria-label="Grabar pregunta por voz">🎤 Hablar</button>
+        <button id="send-button" class="send-button" type="submit">Enviar</button>
+      </form>
+      <div class="chat-footer">
+        <span>Sus consultas se atienden en español.</span>
+        <button id="new-chat" class="text-button" type="button">Nueva conversación</button>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#F6F1E7">
+  <meta name="description" content="Biblioteca UniPutumayo de la Institución Universitaria del Putumayo.">
+  <title>Biblioteca UniPutumayo · Institución Universitaria del Putumayo</title>
+  <script>
+    try {
+      const temaGuardado = localStorage.getItem("tema");
+      document.documentElement.dataset.tema =
+        temaGuardado === "claro" || temaGuardado === "oscuro"
+          ? temaGuardado
+          : matchMedia("(prefers-color-scheme: dark)").matches ? "oscuro" : "claro";
+    } catch {
+      document.documentElement.dataset.tema =
+        matchMedia("(prefers-color-scheme: dark)").matches ? "oscuro" : "claro";
+    }
+  </script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231F4D3A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 7v14'/%3E%3Cpath d='M3 5.5A2.5 2.5 0 0 1 5.5 3H12v16H5.5A2.5 2.5 0 0 0 3 21.5z'/%3E%3Cpath d='M21 5.5A2.5 2.5 0 0 0 18.5 3H12v16h6.5a2.5 2.5 0 0 1 2.5 2.5z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/css/variables.css">
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="/static/css/componentes.css">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script type="module" src="/static/js/app.js"></script>
+</head>
+<body>
+  <section class="pantalla-sesion" id="pantalla-sesion" aria-labelledby="titulo-sesion">
+    <div class="tarjeta tarjeta-sesion">
+      <header class="marca-sesion">
+        <span class="marca-sesion__icono" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 7v14"/><path d="M3 5.5A2.5 2.5 0 0 1 5.5 3H12v16H5.5A2.5 2.5 0 0 0 3 21.5z"/><path d="M21 5.5A2.5 2.5 0 0 0 18.5 3H12v16h6.5a2.5 2.5 0 0 1 2.5 2.5z"/>
+          </svg>
+        </span>
+        <span class="marca-sesion__texto">
+          <strong>Biblioteca UniPutumayo</strong>
+          <small>Institución Universitaria del Putumayo</small>
+        </span>
+      </header>
+      <h1 id="titulo-sesion">Inicia sesión</h1>
+      <p class="texto-sec">Ingresa tus datos institucionales para continuar.</p>
+      <div class="aviso aviso--error sesion-aviso" id="sesion-aviso" role="alert" aria-live="assertive" hidden></div>
+      <form id="formulario-sesion" novalidate>
+        <label class="campo" for="codigo-sesion">Código de usuario
+          <input id="codigo-sesion" name="codigo" type="text" inputmode="numeric" autocomplete="username"
+            maxlength="10" pattern="[0-9]{3,10}" placeholder="Ej.: 101" required aria-describedby="error-codigo-sesion">
+          <small class="campo-error" id="error-codigo-sesion"></small>
+        </label>
+        <label class="campo" for="pin-sesion">PIN
+          <span class="campo-pin">
+            <input id="pin-sesion" name="pin" type="password" inputmode="numeric" maxlength="4"
+              autocomplete="current-password" pattern="[0-9]{4}" required aria-describedby="error-pin-sesion">
+            <button class="btn btn--fantasma boton-mostrar-pin" id="mostrar-pin" type="button"
+              aria-label="Mostrar PIN" aria-pressed="false">Mostrar</button>
+          </span>
+          <small class="campo-error" id="error-pin-sesion"></small>
+        </label>
+        <button class="btn btn--primario boton-entrar" id="entrar-sesion" type="submit">Entrar</button>
+      </form>
+      <div class="separador-sesion" aria-hidden="true"><span>o</span></div>
+      <button class="btn btn--fantasma boton-invitado" id="entrar-invitado" type="button">Entrar como invitado</button>
+      <p class="nota-invitado">Podrás buscar libros y preguntar por el reglamento; para reservar o renovar deberás iniciar sesión.</p>
+      <p class="nota-demo">Usuarios de demostración: códigos 101 a 108 · PIN 1234</p>
+    </div>
+  </section>
+  <div class="app-shell" hidden>
+    <header class="cabecera-movil">
+      <a class="marca" href="#chat" aria-label="Biblioteca UniPutumayo, Institución Universitaria del Putumayo, inicio">
+        <span class="marca__icono" aria-hidden="true"></span>
+        <span class="marca__texto"><strong>Biblioteca</strong><small>Agente</small></span>
+      </a>
+      <div class="cabecera-movil__acciones">
+        <span class="usuario-chip" id="usuario-chip-movil" aria-live="polite">Invitado</span>
+        <button class="btn btn--fantasma boton-sesion-movil" id="iniciar-sesion-movil" type="button" hidden>Iniciar sesión</button>
+        <button class="btn btn--icono" id="abrir-cuenta-movil" type="button" aria-label="Abrir Mi cuenta" aria-controls="panel-cuenta">
+          <span data-icono="usuario"></span>
+        </button>
+        <button class="btn btn--icono" id="abrir-menu-movil" type="button" aria-label="Abrir menú" aria-expanded="false" aria-controls="menu-movil">
+          <span aria-hidden="true">☰</span>
+        </button>
+      </div>
+    </header>
+    <aside class="barra-lateral" aria-label="Navegación principal">
+      <a class="marca" href="#chat" aria-label="Biblioteca UniPutumayo, Institución Universitaria del Putumayo, inicio">
+        <span class="marca__icono" aria-hidden="true"></span>
+        <span class="marca__texto"><strong>Biblioteca UniPutumayo</strong><small>Institución Universitaria del Putumayo</small></span>
+      </a>
+      <button class="btn btn--acento nueva-conversacion" id="nueva-conversacion" type="button">
+        <span aria-hidden="true">＋</span><span>Nueva conversación</span>
+      </button>
+      <button class="btn btn--fantasma borrar-chat" id="borrar-chat" type="button" hidden>
+        <span aria-hidden="true">×</span><span>Borrar chat</span>
+      </button>
+      <button class="btn btn--fantasma subir-tesis" id="subir-tesis" type="button" aria-label="Subir tesis" title="Subir tesis" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M7 3.5h7l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 20V5a1.5 1.5 0 0 1 1-1.5z"/>
+          <path d="M14 3.5V8h4M12 17v-6m-2.5 2.5L12 11l2.5 2.5"/>
+        </svg><span>Subir tesis</span>
+      </button>
+      <button class="btn btn--fantasma estado-subida-tesis" id="estado-subida-tesis" type="button" hidden>
+        <span class="estado-subida-tesis__punto" aria-hidden="true"></span><span>Procesando tesis… 0 %</span>
+      </button>
+      <nav class="navegacion" aria-label="Vistas">
+        <a href="#chat" data-vista="chat" aria-label="Chat"><span data-icono="chat"></span><span>Chat</span></a>
+        <a href="#catalogo" data-vista="catalogo" aria-label="Catálogo"><span data-icono="catalogo"></span><span>Catálogo</span></a>
+        <a href="#mi-cuenta" data-vista="mi-cuenta" aria-label="Mi cuenta"><span data-icono="usuario"></span><span>Mi cuenta</span></a>
+        <a href="#mis-reservas" data-vista="mis-reservas" aria-label="Mis reservas"><span data-icono="reservar"></span><span>Mis reservas</span></a>
+      </nav>
+      <section class="servicios-panel" aria-label="Estado de servicios">
+        <h2>Servicios</h2>
+        <div class="servicios-lista">
+          <span class="servicio servicio--espera" data-servicio="postgresql"><i class="servicio__punto"></i>PostgreSQL</span>
+          <span class="servicio servicio--espera" data-servicio="ollama"><i class="servicio__punto"></i>Ollama</span>
+          <span class="servicio servicio--espera" data-servicio="whisper"><i class="servicio__punto"></i>Whisper</span>
+          <span class="servicio servicio--espera" data-servicio="piper"><i class="servicio__punto"></i>Piper</span>
+        </div>
+      </section>
+      <div class="preferencias">
+        <button class="interruptor preferencia-btn" id="leer-voz" type="button" aria-pressed="false">
+          <span data-icono="play"></span><span>Leer respuestas en voz alta</span>
+        </button>
+        <button class="interruptor preferencia-btn" id="interruptor-tema" type="button" aria-pressed="false">
+          <span data-icono="luna"></span><span>Modo oscuro</span>
+        </button>
+      </div>
+      <a class="enlace-panel-tecnico" href="#panel/mapa"><span data-icono="ajustes"></span><span>Panel técnico</span><span aria-hidden="true">⚙</span></a>
+    </aside>
+    <div class="menu-movil" id="menu-movil" role="dialog" aria-modal="true" aria-labelledby="titulo-menu-movil" hidden>
+      <button class="menu-movil__fondo" id="cerrar-menu-fondo" type="button" aria-label="Cerrar menú"></button>
+      <section class="menu-movil__hoja" aria-label="Preferencias y servicios">
+        <header><h2 id="titulo-menu-movil">Menú</h2><button class="btn btn--icono" id="cerrar-menu-movil" type="button" aria-label="Cerrar menú"><span data-icono="x"></span></button></header>
+        <div id="contenido-menu-movil"></div>
+      </section>
+    </div>
+
+    <main class="zona-central">
+      <div class="vistas">
+        <section class="vista vista--activa" id="vista-chat" data-contenedor-vista="chat" aria-labelledby="titulo-chat"></section>
+        <section class="vista catalogo" id="vista-catalogo" data-contenedor-vista="catalogo" aria-labelledby="titulo-catalogo" hidden></section>
+        <section class="vista vista-reservas" id="vista-mis-reservas" data-contenedor-vista="mis-reservas" aria-labelledby="titulo-mis-reservas" hidden>
+          <h1 id="titulo-mis-reservas" tabindex="-1">Mis reservas</h1>
+          <div class="mis-reservas-contenido" id="mis-reservas-contenido"></div>
+        </section>
+        <section class="vista panel-tecnico" id="vista-panel" data-contenedor-vista="panel" aria-labelledby="titulo-panel-tecnico" hidden>
+          <header class="panel-tecnico__encabezado">
+            <div>
+              <h1 id="titulo-panel-tecnico" tabindex="-1">Panel técnico</h1>
+              <p>Herramientas para la demostración y el seguimiento del agente.</p>
+            </div>
+            <a class="btn btn--fantasma panel-tecnico__volver" href="#chat">← Volver al chat</a>
+          </header>
+          <div class="panel-tecnico__pestanas" role="tablist" aria-label="Herramientas técnicas">
+            <button id="pestana-panel-mapa" type="button" role="tab" aria-selected="true" aria-controls="panel-mapa" tabindex="0" data-pestana-panel="mapa">Mapa del conocimiento</button>
+            <button id="pestana-panel-sql" type="button" role="tab" aria-selected="false" aria-controls="panel-sql" tabindex="-1" data-pestana-panel="sql">SQL vs pgvector</button>
+            <button id="pestana-panel-bitacora" type="button" role="tab" aria-selected="false" aria-controls="panel-bitacora" tabindex="-1" data-pestana-panel="bitacora">Bitácora</button>
+          </div>
+          <section class="panel-tecnico__contenido" id="panel-mapa" role="tabpanel" aria-labelledby="pestana-panel-mapa" tabindex="0" data-panel-contenido="mapa"></section>
+          <section class="panel-tecnico__contenido" id="panel-sql" role="tabpanel" aria-labelledby="pestana-panel-sql" tabindex="0" data-panel-contenido="sql" hidden></section>
+          <section class="panel-tecnico__contenido" id="panel-bitacora" role="tabpanel" aria-labelledby="pestana-panel-bitacora" tabindex="0" data-panel-contenido="bitacora" hidden></section>
+        </section>
+      </div>
+    </main>
+
+    <aside class="panel-cuenta" id="panel-cuenta" aria-label="Mi cuenta">
+      <div class="panel-cuenta__encabezado">
+        <h2 tabindex="-1">Mi cuenta</h2>
+        <button class="btn btn--icono" id="plegar-cuenta" type="button" aria-label="Plegar panel Mi cuenta" aria-expanded="true">
+          <span data-icono="x"></span>
+        </button>
+      </div>
+      <div class="cuenta-contenido" id="cuenta-contenido"></div>
+    </aside>
+    <button class="cuenta-overlay" id="cuenta-overlay" type="button" aria-label="Cerrar panel Mi cuenta" hidden></button>
+    <nav class="navegacion-movil" aria-label="Navegación inferior">
+      <a href="#chat" data-vista="chat" aria-label="Chat"><span data-icono="chat"></span><small>Chat</small></a>
+      <a href="#catalogo" data-vista="catalogo" aria-label="Catálogo"><span data-icono="catalogo"></span><small>Catálogo</small></a>
+      <a href="#mis-reservas" data-vista="mis-reservas" aria-label="Mis reservas"><span data-icono="reservar"></span><small>Reservas</small></a>
+      <a href="#mi-cuenta" data-vista="mi-cuenta" aria-label="Mi cuenta"><span data-icono="usuario"></span><small>Mi cuenta</small></a>
+    </nav>
+  </div>
+</body>
+</html>

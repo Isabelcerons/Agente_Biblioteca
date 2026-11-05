@@ -1,0 +1,187 @@
+@font-face {
+  font-family: Inter;
+  src: url("../fonts/inter-400.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Inter;
+  src: url("../fonts/inter-500.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Inter;
+  src: url("../fonts/inter-600.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Inter;
+  src: url("../fonts/inter-700.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Fraunces;
+  src: url("../fonts/fraunces-500.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Fraunces;
+  src: url("../fonts/fraunces-600.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Fraunces;
+  src: url("../fonts/fraunces-700.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Fraunces;
+  src: url("../fonts/fraunces-500-italic.woff2") format("woff2");
+  font-style: italic;
+  font-weight: 500;
+  font-display: swap;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--fondo);
+  scroll-behavior: smooth;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  color: var(--texto);
+  background-color: var(--fondo);
+  background-image:
+    radial-gradient(ellipse at 12% 8%, rgb(201 162 39 / 5%), transparent 34%),
+    radial-gradient(ellipse at 90% 48%, rgb(139 94 60 / 4%), transparent 38%);
+  font-family: Inter, sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+
+[data-tema="oscuro"] body {
+  background-image:
+    radial-gradient(ellipse at 12% 8%, rgb(201 162 39 / 5%), transparent 34%),
+    radial-gradient(ellipse at 90% 48%, rgb(50 103 75 / 10%), transparent 38%);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: var(--verde);
+  text-underline-offset: .18em;
+}
+
+[data-tema="oscuro"] a {
+  color: #A8D4B7;
+}
+
+h1,
+h2,
+h3,
+h4,
+.titulo {
+  margin: 0;
+  font-family: Fraunces, Georgia, serif;
+  font-weight: 600;
+  line-height: 1.16;
+}
+
+p {
+  margin: 0;
+}
+
+::selection {
+  color: var(--tinta);
+  background: #EBD99C;
+}
+
+:focus-visible {
+  outline: 3px solid var(--foco);
+  outline-offset: 3px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+  border: 0;
+}
+
+* {
+  scrollbar-color: #A79B85 transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: #A79B85;
+  background-clip: padding-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

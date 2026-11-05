@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#F6F1E7">
+  <title>Biblioteca viva · Guía de estilo</title>
+  <!-- Este fragmento mínimo evita el parpadeo al aplicar la preferencia guardada en el head. -->
+  <script>
+    try {
+      const temaGuardado = localStorage.getItem("tema");
+      document.documentElement.dataset.tema =
+        temaGuardado === "claro" || temaGuardado === "oscuro"
+          ? temaGuardado
+          : matchMedia("(prefers-color-scheme: dark)").matches ? "oscuro" : "claro";
+    } catch {
+      document.documentElement.dataset.tema =
+        matchMedia("(prefers-color-scheme: dark)").matches ? "oscuro" : "claro";
+    }
+  </script>
+  <link rel="stylesheet" href="/static/css/variables.css">
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="/static/css/componentes.css">
+</head>
+<body>
+  <header class="contenedor seccion">
+    <div class="seccion__encabezado">
+      <div>
+        <p class="chip chip--fuente"><span aria-hidden="true">✦</span> Sistema de diseño</p>
+        <h1 style="margin-top: 12px">Biblioteca viva</h1>
+        <p class="texto-sec" style="margin-top: 8px">Una interfaz cálida, clara y accesible para encontrar historias y conocimiento.</p>
+      </div>
+      <button class="interruptor" id="interruptor-tema" type="button" aria-pressed="false" aria-label="Activar modo oscuro">
+        <span>Modo oscuro</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="contenedor">
+    <section class="seccion" aria-labelledby="paleta-titulo">
+      <div class="seccion__encabezado">
+        <div><h2 id="paleta-titulo">Paleta de color</h2><p>Colores base, acentos y estados.</p></div>
+      </div>
+      <div class="paleta-muestra">
+        <div class="color-muestra"><div class="color-muestra__bloque" style="--muestra:#F6F1E7"></div><div class="color-muestra__texto"><strong>Papel</strong><span>#F6F1E7</span></div></div>
+        <div class="color-muestra"><div class="color-muestra__bloque" style="--muestra:#FFFDF8"></div><div class="color-muestra__texto"><strong>Superficie</strong><span>#FFFDF8</span></div></div>
+        <div class="color-muestra"><div class="color-muestra__bloque" style="--muestra:#1F4D3A"></div><div class="color-muestra__texto"><strong>Verde</strong><span>#1F4D3A</span></div></div>
+        <div class="color-muestra"><div class="color-muestra__bloque" style="--muestra:#E3EDE6"></div><div class="color-muestra__texto"><strong>Verde claro</strong><span>#E3EDE6</span></div></div>
+        <div class="color-muestra"><div class="color-muestra__bloque" style="--muestra:#8B5E3C"></div><div class="color-muestra__texto"><strong>Madera</strong><span>#8B5E3C</span></div></div>
+        <div class="color-muestra"><div class="color-muestra__bloque" style="--muestra:#C9A227"></div><div class="color-muestra__texto"><strong>Latón</strong><span>#C9A227</span></div></div>
+        <div class="color-muestra"><div class="color-muestra__bloque" style="--muestra:#2A2A28"></div><div class="color-muestra__texto"><strong>Tinta</strong><span>#2A2A28</span></div></div>
+        <div class="color-muestra"><div class="color-muestra__bloque" style="--muestra:#6B6A64"></div><div class="color-muestra__texto"><strong>Gris</strong><span>#6B6A64</span></div></div>
+        <div class="color-muestra"><div class="color-muestra__bloque" style="--muestra:#2E7D4F"></div><div class="color-muestra__texto"><strong>Disponible</strong><span>#2E7D4F</span></div></div>
+        <div class="color-muestra"><div class="color-muestra__bloque" style="--muestra:#B54A3C"></div><div class="color-muestra__texto"><strong>Prestado</strong><span>#B54A3C</span></div></div>
+        <div class="color-muestra"><div class="color-muestra__bloque" style="--muestra:#C98A1B"></div><div class="color-muestra__texto"><strong>Reservado</strong><span>#C98A1B</span></div></div>
+      </div>
+    </section>
+
+    <section class="seccion" aria-labelledby="tipografia-titulo">
+      <div class="seccion__encabezado"><div><h2 id="tipografia-titulo">Tipografía</h2><p>Fraunces para contar; Inter para orientar.</p></div></div>
+      <article class="tarjeta">
+        <h3 style="font-size:2rem">Un lugar para cada historia</h3>
+        <p style="margin-top:12px">Fraunces Semibold · Titulares y momentos editoriales</p>
+        <p class="texto-sec" style="margin-top:16px">Inter Regular · El cuerpo de texto se presenta a 16 px con interlineado 1.55, para que leer y explorar sea sencillo en cualquier pantalla.</p>
+        <p style="margin-top:12px;font-family:Fraunces,Georgia,serif;font-size:1.4rem;font-style:italic">«Los libros son puertas que se abren en silencio.»</p>
+      </article>
+    </section>
+
+    <section class="seccion" aria-labelledby="botones-titulo">
+      <div class="seccion__encabezado"><div><h2 id="botones-titulo">Botones y estados</h2><p>Prueba el foco con Tab y el estado activo con clic.</p></div></div>
+      <div class="tarjeta rejilla">
+        <div class="muestra-estados">
+          <div class="muestra-estados__fila"><span>Normal</span><button class="btn btn--primario" type="button">Explorar catálogo</button><button class="btn btn--acento" type="button">Reservar</button><button class="btn btn--fantasma" type="button">Cancelar</button><button class="btn btn--icono" type="button" aria-label="Buscar"><span data-icono="buscar"></span></button></div>
+          <div class="muestra-estados__fila"><span>Hover</span><button class="btn btn--primario btn--muestra-hover" type="button">Explorar catálogo</button><button class="btn btn--acento btn--muestra-hover" type="button">Reservar</button><button class="btn btn--fantasma btn--muestra-hover" type="button">Cancelar</button><button class="btn btn--icono btn--muestra-hover" type="button" aria-label="Buscar en estado hover"><span data-icono="buscar"></span></button></div>
+          <div class="muestra-estados__fila"><span>Foco visible</span><button class="btn btn--primario btn--muestra-foco" type="button">Explorar catálogo</button><button class="btn btn--acento btn--muestra-foco" type="button">Reservar</button><button class="btn btn--fantasma btn--muestra-foco" type="button">Cancelar</button><button class="btn btn--icono btn--muestra-foco" type="button" aria-label="Buscar con foco visible"><span data-icono="buscar"></span></button></div>
+          <div class="muestra-estados__fila"><span>Deshabilitado</span><button class="btn btn--primario" type="button" disabled>Explorar catálogo</button><button class="btn btn--acento" type="button" disabled>Reservar</button><button class="btn btn--fantasma" type="button" disabled>Cancelar</button><button class="btn btn--icono" type="button" aria-label="Buscar deshabilitado" disabled><span data-icono="buscar"></span></button></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="seccion" aria-labelledby="campos-titulo">
+      <div class="seccion__encabezado"><div><h2 id="campos-titulo">Campos y chips</h2><p>Etiquetas claras, límites visibles.</p></div></div>
+      <div class="rejilla rejilla--2">
+        <article class="tarjeta rejilla">
+          <label class="campo">Buscar en el catálogo<input type="search" placeholder="Título, autora o tema"></label>
+          <label class="campo">Tipo de material<select><option>Todos los tipos</option><option>Libro</option><option>Tesis</option></select></label>
+          <label class="campo">Cuéntanos qué buscas<textarea rows="3" placeholder="Por ejemplo, libros sobre biodiversidad amazónica"></textarea></label>
+        </article>
+        <article class="tarjeta">
+          <h3>Chips</h3>
+          <div class="fila" style="margin-top:16px"><span class="chip">Libro</span><span class="chip">2024</span><span class="chip chip--fuente"><span data-icono="fuente"></span> Reseña del catálogo</span><span class="chip chip--fuente"><span data-icono="resumen"></span> Resumen de tesis</span></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="seccion" aria-labelledby="estados-titulo">
+      <div class="seccion__encabezado"><div><h2 id="estados-titulo">Estados e indicadores</h2><p>El color siempre acompaña a una etiqueta textual.</p></div></div>
+      <div class="rejilla rejilla--2">
+        <article class="tarjeta rejilla">
+          <div class="fila"><span class="estado estado--disponible">Disponible</span><span class="estado estado--prestado">Prestado</span><span class="estado estado--reservado">Reservado</span></div>
+          <div class="fila"><span class="servicio servicio--ok"><span class="servicio__punto"></span>Servicio disponible</span><span class="servicio servicio--error"><span class="servicio__punto"></span>Servicio con error</span><span class="servicio servicio--espera"><span class="servicio__punto"></span>Comprobando</span></div>
+        </article>
+        <article class="tarjeta confirmacion">
+          <p class="confirmacion__titulo"><span data-icono="reservar"></span> Confirmar reserva</p>
+          <p>¿Deseas reservar <strong>La vorágine</strong>? Te avisaremos cuando esté lista.</p>
+          <div class="fila"><button class="btn btn--primario" type="button">Sí, reservar</button><button class="btn btn--fantasma" type="button">Ahora no</button></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="seccion" aria-labelledby="libros-titulo">
+      <div class="seccion__encabezado"><div><h2 id="libros-titulo">Lomos de catálogo</h2><p>Una franja por tipo, con estado y coincidencia visibles.</p></div></div>
+      <div class="rejilla rejilla--4">
+        <article class="lomo lomo--libro"><p class="lomo__tipo">Libro</p><h3>La vorágine</h3><p class="lomo__autor">José Eustasio Rivera · 1924</p><div class="lomo__pie"><span class="lomo__estante">Estante A-12</span><span class="estado estado--disponible">Disponible</span></div><div class="coincidencia"><progress value="87" max="100" aria-label="Coincidencia 87 por ciento"></progress><span>87 %</span></div></article>
+        <article class="lomo lomo--tesis"><p class="lomo__tipo">Tesis</p><h3>Biodiversidad andina</h3><p class="lomo__autor">María Quintero · 2022</p><div class="lomo__pie"><span class="lomo__estante">Repositorio</span><span class="estado estado--prestado">Prestado</span></div></article>
+        <article class="lomo lomo--articulo"><p class="lomo__tipo">Artículo</p><h3>Ríos y territorio</h3><p class="lomo__autor">P. Gómez · 2021</p><div class="lomo__pie"><span class="lomo__estante">Estante C-04</span><span class="estado estado--reservado">Reservado</span></div></article>
+        <article class="lomo lomo--recurso_digital"><p class="lomo__tipo">Recurso digital</p><h3>Atlas de la Amazonía</h3><p class="lomo__autor">Instituto Geográfico · 2023</p><div class="lomo__pie"><span class="lomo__estante">En línea</span><span class="estado estado--disponible">Disponible</span></div></article>
+      </div>
+    </section>
+
+    <section class="seccion" aria-labelledby="avisos-titulo">
+      <div class="seccion__encabezado"><div><h2 id="avisos-titulo">Avisos y estados de carga</h2><p>Mensajes visibles sin depender solo del color.</p></div></div>
+      <div class="rejilla rejilla--2">
+        <div class="aviso aviso--info"><span data-icono="check"></span><p><strong>Listo.</strong> Encontramos materiales para tu búsqueda.</p></div>
+        <div class="aviso aviso--error"><span data-icono="alerta"></span><p><strong>No se pudo completar.</strong> Revisa tu conexión e inténtalo de nuevo.</p></div>
+        <article class="tarjeta"><h3>El asistente está pensando</h3><p class="pensando" role="status" aria-label="Procesando"><span></span><span></span><span></span><span class="sr-only">Procesando la búsqueda</span></p></article>
+        <article class="tarjeta"><h3>Tiempo de respuesta</h3><div class="barra-tiempos" role="img" aria-label="Tiempos: reconocimiento 18 por ciento, búsqueda 22 por ciento, respuesta 45 por ciento, voz 15 por ciento"><span class="barra-tiempos__segmento barra-tiempos__stt" style="width:18%"></span><span class="barra-tiempos__segmento barra-tiempos__busqueda" style="width:22%"></span><span class="barra-tiempos__segmento barra-tiempos__llm" style="width:45%"></span><span class="barra-tiempos__segmento barra-tiempos__tts" style="width:15%"></span></div><div class="leyenda"><span class="leyenda__item"><i class="leyenda__color barra-tiempos__stt"></i>Reconocimiento</span><span class="leyenda__item"><i class="leyenda__color barra-tiempos__busqueda"></i>Búsqueda</span><span class="leyenda__item"><i class="leyenda__color barra-tiempos__llm"></i>Respuesta</span><span class="leyenda__item"><i class="leyenda__color barra-tiempos__tts"></i>Voz</span></div></article>
+      </div>
+    </section>
+
+    <section class="seccion" aria-labelledby="iconos-titulo">
+      <div class="seccion__encabezado"><div><h2 id="iconos-titulo">Iconografía</h2><p>Trazos propios de 1.5 px con color adaptable.</p></div></div>
+      <div class="iconos" id="muestra-iconos"></div>
+    </section>
+  </main>
+  <footer class="contenedor seccion"><p class="texto-sec">Biblioteca viva · Interfaz accesible para todas las personas.</p></footer>
+  <script type="module">
+    import { iniciarTema } from "/static/js/tema.js";
+    import { iconos } from "/static/js/iconos.js";
+
+    iniciarTema();
+    const contenedorIconos = document.querySelector("#muestra-iconos");
+    for (const [nombre, dibujo] of Object.entries(iconos)) {
+      const elemento = document.createElement("div");
+      elemento.className = "icono-muestra";
+      elemento.innerHTML = `${dibujo}<span>${nombre}</span>`;
+      contenedorIconos.append(elemento);
+    }
+    document.querySelectorAll("[data-icono]").forEach((elemento) => {
+      elemento.innerHTML = iconos[elemento.dataset.icono] || "";
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+# Dependencias directas del Agente de Biblioteca (Python 3.13)
+fastapi==0.162.0
+uvicorn==0.54.0
+python-multipart==0.0.33
+psycopg[binary]==3.3.7
+pgvector==0.5.1
+ollama==0.6.3
+faster-whisper==1.2.1
+piper-tts==1.8.0
+python-dotenv==1.2.4
+# PyAV 19 eliminó el argumento metadata_errors que usa faster-whisper 1.2.1
+av==16.1.0
+# Extracción de texto de las tesis subidas al repositorio (Fase C)
+pypdf==6.21.4

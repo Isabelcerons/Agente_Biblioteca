@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#F6F1E7">
+  <title>Mapa del conocimiento · Institución Universitaria del Putumayo</title>
+  <script>
+    try {
+      const temaGuardado = localStorage.getItem("tema");
+      document.documentElement.dataset.tema =
+        temaGuardado === "claro" || temaGuardado === "oscuro"
+          ? temaGuardado
+          : matchMedia("(prefers-color-scheme: dark)").matches ? "oscuro" : "claro";
+    } catch {
+      document.documentElement.dataset.tema =
+        matchMedia("(prefers-color-scheme: dark)").matches ? "oscuro" : "claro";
+    }
+  </script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231F4D3A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 7v14'/%3E%3Cpath d='M3 5.5A2.5 2.5 0 0 1 5.5 3H12v16H5.5A2.5 2.5 0 0 0 3 21.5z'/%3E%3Cpath d='M21 5.5A2.5 2.5 0 0 0 18.5 3H12v16h6.5a2.5 2.5 0 0 1 2.5 2.5z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/css/variables.css">
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="/static/css/componentes.css">
+</head>
+<body>
+  <header class="contenedor seccion">
+    <div class="seccion__encabezado">
+      <div>
+        <p class="chip chip--fuente">Explora ideas y conexiones</p>
+        <h1 style="margin-top: 12px">Mapa del conocimiento</h1>
+      </div>
+      <button class="interruptor" id="interruptor-tema" type="button"
+        aria-pressed="false" aria-label="Activar modo oscuro">
+        <span>Modo oscuro</span>
+      </button>
+    </div>
+    <a href="/">← Volver al chat</a>
+  </header>
+  <main class="contenedor seccion">
+    <div id="mapa"></div>
+  </main>
+  <script type="module">
+    import { iniciarTema } from "/static/js/tema.js";
+    import { montarMapa } from "/static/js/mapa.js";
+
+    iniciarTema();
+    montarMapa(document.querySelector("#mapa"));
+  </script>
+</body>
+</html>
