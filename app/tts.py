@@ -131,12 +131,40 @@ def _cargar_xtts(acepto_cpml: bool) -> Any:
                 # El valor se establece solo cuando la persona acepta en la interfaz.
                 os.environ["COQUI_TOS_AGREED"] = "1"
                 from TTS.api import TTS
+                import TTS.tts.models.xtts as xtts_model
+
+                # XTTS usa torchaudio.load(), que desde torchaudio 2.9 depende de
+                # TorchCodec y de DLL de FFmpeg compartido. El archivo de referencia
+                # que generamos es WAV PCM16, así que podemos leerlo sin esa capa.
+                xtts_model.load_audio = _cargar_audio_xtts
 
                 _modelo_xtts = TTS(
                     "tts_models/multilingual/multi-dataset/xtts_v2",
                     progress_bar=False,
                 ).to("cpu")
     return _modelo_xtts
+
+
+def _cargar_audio_xtts(ruta: str | Path, tasa_objetivo: int) -> Any:
+    """Carga el WAV PCM de referencia sin requerir TorchCodec ni FFmpeg DLLs."""
+    import numpy as np
+    import torch
+    import torchaudio
+
+    with wave.open(str(ruta), "rb") as archivo:
+        canales = archivo.getnchannels()
+        ancho = archivo.getsampwidth()
+        tasa = archivo.getframerate()
+        cuadros = archivo.readframes(archivo.getnframes())
+    if ancho != 2:
+        raise ValueError("El audio temporal de referencia debe ser WAV PCM de 16 bits.")
+    muestras = np.frombuffer(cuadros, dtype="<i2").astype(np.float32) / 32768.0
+    if canales > 1:
+        muestras = muestras.reshape(-1, canales).mean(axis=1)
+    audio = torch.from_numpy(muestras.copy()).unsqueeze(0)
+    if tasa != tasa_objetivo:
+        audio = torchaudio.functional.resample(audio, tasa, tasa_objetivo)
+    return audio.clamp_(-1.0, 1.0)
 
 
 def esta_listo() -> bool:
