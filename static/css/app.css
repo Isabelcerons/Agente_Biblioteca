@@ -353,6 +353,48 @@ body:has(.pantalla-sesion:not([hidden])) {
   gap: 8px;
 }
 
+.preferencia-voz {
+  display: grid;
+  gap: 5px;
+  color: var(--texto-sec);
+  font-size: .78rem;
+}
+
+.selector-voz {
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 9px;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  background: var(--superficie);
+  color: var(--texto);
+  font: inherit;
+}
+
+.preferencia-prueba {
+  min-height: 36px;
+  justify-content: center;
+  padding: 5px 8px;
+  font-size: .8rem;
+}
+
+.reproductor-prueba-voz {
+  width: 100%;
+  height: 36px;
+}
+
+.reproductor-prueba-voz[hidden] {
+  display: none;
+}
+
+.estado-voz {
+  min-height: 1em;
+  margin: 0;
+  color: var(--texto-sec);
+  font-size: .75rem;
+  overflow-wrap: anywhere;
+}
+
 .preferencia-btn {
   justify-content: flex-start;
   padding-inline: 10px;
@@ -1068,6 +1110,17 @@ button svg,
     justify-content: center;
     overflow: hidden;
     padding: 8px;
+  }
+
+  .preferencias .preferencia-voz,
+  .preferencias .preferencia-prueba,
+  .preferencias .estado-voz {
+    width: 100%;
+  }
+
+  .preferencias .preferencia-voz {
+    justify-items: stretch;
+    text-align: left;
   }
 
   .panel-cuenta {
@@ -1792,4 +1845,52 @@ button svg,
   .estado-subida-tesis__punto {
     animation: none;
   }
+}
+
+.panel-tecnico {
+  min-width: 0;
+}
+
+.panel-tecnico__encabezado {
+  margin-bottom: 16px;
+}
+
+.panel-tecnico__pestanas {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border-bottom: 1px solid var(--borde);
+}
+
+.panel-tecnico__pestanas [role="tab"] {
+  flex: 0 0 auto;
+  margin-bottom: -1px;
+  padding: 10px 16px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: var(--radio) var(--radio) 0 0;
+  background: transparent;
+  color: var(--texto-sec);
+  font-family: Inter, sans-serif;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.panel-tecnico__pestanas [role="tab"][aria-selected="true"] {
+  border-bottom-color: var(--laton);
+  background: var(--superficie);
+  color: var(--texto);
+}
+
+.panel-tecnico__pestanas [role="tab"]:hover {
+  background: var(--verde-claro);
+}
+
+.panel-tecnico__pestanas [role="tab"]:focus-visible {
+  outline: 3px solid var(--foco);
+  outline-offset: -4px;
 }

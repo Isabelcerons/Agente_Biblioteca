@@ -118,6 +118,18 @@
         </div>
       </section>
       <div class="preferencias">
+        <label class="preferencia-voz" for="voz-agente">Voz del agente
+          <select id="voz-agente" class="selector-voz">
+            <option value="claude">Claude · México</option>
+            <option value="ald">Ald · México</option>
+            <option value="sharvard_f">Sharvard · Femenina</option>
+            <option value="sharvard_m">Sharvard · Masculina</option>
+            <option value="personalizada">Mi voz personalizada</option>
+          </select>
+        </label>
+        <button class="btn btn--fantasma preferencia-prueba" id="probar-voz" type="button">Escuchar prueba</button>
+        <audio class="reproductor-prueba-voz" id="reproductor-prueba-voz" controls hidden></audio>
+        <p class="estado-voz" id="estado-voz" aria-live="polite"></p>
         <button class="interruptor preferencia-btn" id="leer-voz" type="button" aria-pressed="false">
           <span data-icono="play"></span><span>Leer respuestas en voz alta</span>
         </button>

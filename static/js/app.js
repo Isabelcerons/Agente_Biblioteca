@@ -2,7 +2,7 @@ import { iconos } from "./iconos.js";
 import { iniciarTema } from "./tema.js";
 import { montarChat } from "./chat.js";
 import { montarCuenta } from "./cuenta.js";
-import { cancelarReserva, cerrarSesion, obtenerAvisosDisponibilidad } from "./api.js";
+import { cancelarReserva, cerrarSesion, obtenerAvisosDisponibilidad, obtenerVoces, sintetizar } from "./api.js";
 import { montarSesion } from "./sesion.js";
 import { montarTesis } from "./tesis.js";
 
@@ -12,6 +12,10 @@ const contenidoCuenta = document.querySelector("#cuenta-contenido");
 const overlayCuenta = document.querySelector("#cuenta-overlay");
 const botonPlegarCuenta = document.querySelector("#plegar-cuenta");
 const botonLeerVoz = document.querySelector("#leer-voz");
+const selectorVozAgente = document.querySelector("#voz-agente");
+const botonProbarVoz = document.querySelector("#probar-voz");
+const reproductorPruebaVoz = document.querySelector("#reproductor-prueba-voz");
+const estadoVoz = document.querySelector("#estado-voz");
 const botonMenuMovil = document.querySelector("#abrir-menu-movil");
 const menuMovil = document.querySelector("#menu-movil");
 const contenidoMenuMovil = document.querySelector("#contenido-menu-movil");
@@ -96,6 +100,14 @@ function guardarPreferencia(clave, valor) {
   } catch {
     // La preferencia se mantiene en memoria aunque el almacenamiento no esté disponible.
   }
+}
+
+function cargarPreferenciaTexto(clave, inicial) {
+  try { return localStorage.getItem(clave) || inicial; } catch { return inicial; }
+}
+
+function guardarPreferenciaTexto(clave, valor) {
+  try { localStorage.setItem(clave, valor); } catch { /* La selección sigue activa hasta recargar. */ }
 }
 
 function mostrarErrorVista(contenedor, mensaje) {
@@ -380,6 +392,83 @@ async function consultarSalud() {
 function inicializarPreferencias() {
   iniciarTema();
   let leerVoz = cargarPreferencia("biblioteca-leer-voz", false);
+  let vozElegida = cargarPreferenciaTexto("biblioteca-voz-agente", "claude");
+  selectorVozAgente.value = vozElegida;
+  const actualizarEspejoVoz = () => {
+    const espejo = contenidoMenuMovil?.querySelector("[data-espejo-voz-select]");
+    if (!espejo) return;
+    espejo.value = selectorVozAgente.value;
+    [...espejo.options].forEach((opcion) => {
+      const original = [...selectorVozAgente.options].find((item) => item.value === opcion.value);
+      if (original) {
+        opcion.disabled = original.disabled;
+        opcion.title = original.title;
+        opcion.textContent = original.textContent;
+      }
+    });
+  };
+  const cargarDisponibilidadVoces = async () => {
+    try {
+      const resultado = await obtenerVoces();
+      (resultado.voces || []).forEach((voz) => {
+        const opcion = [...selectorVozAgente.options].find((item) => item.value === voz.id);
+        if (!opcion) return;
+        opcion.disabled = !voz.disponible;
+        opcion.title = voz.detalle || "";
+        if (!voz.disponible) opcion.textContent = `${opcion.textContent} · no disponible`;
+        if (voz.id === "personalizada" && !voz.disponible) estadoVoz.textContent = voz.detalle;
+      });
+      const seleccion = [...selectorVozAgente.options].find((opcion) => opcion.value === vozElegida);
+      if (!seleccion || seleccion.disabled) {
+        vozElegida = "claude";
+        selectorVozAgente.value = vozElegida;
+        guardarPreferenciaTexto("biblioteca-voz-agente", vozElegida);
+      }
+      actualizarEspejoVoz();
+    } catch {
+      estadoVoz.textContent = "No se pudo cargar la lista de voces.";
+    }
+  };
+  selectorVozAgente.addEventListener("change", () => {
+    const anterior = vozElegida;
+    if (selectorVozAgente.value === "personalizada"
+      && cargarPreferenciaTexto("biblioteca-acepto-cpml", "false") !== "true") {
+      const acepta = window.confirm(
+        "La voz personalizada usa XTTS-v2, cuya licencia permite solo uso no comercial. "
+        + "Consulta https://coqui.com/cpml. ¿Aceptas esa licencia para activar esta voz?",
+      );
+      if (!acepta) {
+        selectorVozAgente.value = anterior;
+        return;
+      }
+      guardarPreferenciaTexto("biblioteca-acepto-cpml", "true");
+    }
+    vozElegida = selectorVozAgente.value;
+    guardarPreferenciaTexto("biblioteca-voz-agente", vozElegida);
+    reproductorPruebaVoz.hidden = true;
+    reproductorPruebaVoz.removeAttribute("src");
+    estadoVoz.textContent = vozElegida === "personalizada"
+      ? "La primera prueba descarga XTTS-v2 y puede tardar varios minutos. El audio se procesa localmente."
+      : "Voz seleccionada. Pulsa «Escuchar prueba» para oírla.";
+    actualizarEspejoVoz();
+  });
+  botonProbarVoz.addEventListener("click", async () => {
+    botonProbarVoz.disabled = true;
+    reproductorPruebaVoz.hidden = true;
+    estadoVoz.textContent = vozElegida === "personalizada"
+      ? "Preparando el modelo XTTS-v2 en este equipo; la primera descarga puede tardar."
+      : "Generando una muestra de voz…";
+    try {
+      const muestra = await sintetizar("Hola, soy el agente de la biblioteca. ¿En qué puedo ayudarte?");
+      reproductorPruebaVoz.src = `data:audio/wav;base64,${muestra.audio_wav_base64}`;
+      reproductorPruebaVoz.hidden = false;
+      estadoVoz.textContent = "Muestra lista. Pulsa reproducir para escucharla.";
+    } catch (error) {
+      estadoVoz.textContent = error.message || "No se pudo generar la muestra.";
+    } finally {
+      botonProbarVoz.disabled = false;
+    }
+  });
   const establecer = () => {
     botonLeerVoz.setAttribute("aria-pressed", String(leerVoz));
     botonLeerVoz.title = leerVoz ? "Desactivar lectura en voz alta" : "Activar lectura en voz alta";
@@ -400,6 +489,7 @@ function inicializarPreferencias() {
   new MutationObserver(actualizarTooltipTema).observe(botonTema, { attributes: true, attributeFilter: ["aria-label"] });
   actualizarTooltipTema();
   establecer();
+  void cargarDisponibilidadVoces();
   return establecer;
 }
 
@@ -494,6 +584,47 @@ function configurarMenuMovil() {
   botonVozMovil.removeAttribute("id");
   botonVozMovil.dataset.espejoVoz = "";
   botonVozMovil.addEventListener("click", () => document.querySelector("#leer-voz").click());
+  const selectorVozMovil = preferenciasMoviles.querySelector("#voz-agente");
+  selectorVozMovil.id = "voz-agente-movil";
+  selectorVozMovil.dataset.espejoVozSelect = "";
+  preferenciasMoviles.querySelector('label[for="voz-agente"]')?.setAttribute("for", "voz-agente-movil");
+  selectorVozMovil.addEventListener("change", () => {
+    selectorVozAgente.value = selectorVozMovil.value;
+    selectorVozAgente.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  const botonProbarVozMovil = preferenciasMoviles.querySelector("#probar-voz");
+  botonProbarVozMovil.removeAttribute("id");
+  botonProbarVozMovil.addEventListener("click", () => botonProbarVoz.click());
+  const estadoVozMovil = preferenciasMoviles.querySelector("#estado-voz");
+  estadoVozMovil.removeAttribute("id");
+  estadoVozMovil.dataset.espejoEstadoVoz = "";
+  const audioPruebaVozMovil = preferenciasMoviles.querySelector("#reproductor-prueba-voz");
+  audioPruebaVozMovil.removeAttribute("id");
+  new MutationObserver(() => {
+    selectorVozMovil.value = selectorVozAgente.value;
+    [...selectorVozMovil.options].forEach((opcion) => {
+      const original = [...selectorVozAgente.options].find((item) => item.value === opcion.value);
+      if (original) {
+        opcion.disabled = original.disabled;
+        opcion.title = original.title;
+        opcion.textContent = original.textContent;
+      }
+    });
+    botonProbarVozMovil.disabled = botonProbarVoz.disabled;
+    audioPruebaVozMovil.hidden = reproductorPruebaVoz.hidden;
+    if (reproductorPruebaVoz.src && audioPruebaVozMovil.src !== reproductorPruebaVoz.src) {
+      audioPruebaVozMovil.src = reproductorPruebaVoz.src;
+    }
+    estadoVozMovil.textContent = estadoVoz.textContent;
+  }).observe(selectorVozAgente, { attributes: true, childList: true, subtree: true });
+  new MutationObserver(() => {
+    audioPruebaVozMovil.hidden = reproductorPruebaVoz.hidden;
+    if (reproductorPruebaVoz.src) audioPruebaVozMovil.src = reproductorPruebaVoz.src;
+  }).observe(reproductorPruebaVoz, { attributes: true, attributeFilter: ["hidden", "src"] });
+  new MutationObserver(() => {
+    estadoVozMovil.textContent = estadoVoz.textContent;
+    botonProbarVozMovil.disabled = botonProbarVoz.disabled;
+  }).observe(estadoVoz, { childList: true, characterData: true, subtree: true });
   const botonTemaMovil = preferenciasMoviles.querySelector("#interruptor-tema");
   botonTemaMovil.removeAttribute("id");
   const botonTemaOriginal = document.querySelector("#interruptor-tema");

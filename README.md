@@ -7,6 +7,10 @@ Todo corre en local y en CPU: Ollama (`qwen2.5:3b`), embeddinggemma (768 dimensi
 
 ### Voz y modo llamada
 
+En **Voz del agente** puedes seleccionar Claude o Ald (es-MX), o las voces femenina y masculina Sharvard (es-ES), y escuchar una muestra. Las voces Piper funcionan localmente. Para activar la voz personalizada, coloca un audio autorizado en `voz que quiero/` y ejecuta `instalar_voz_personalizada.bat`; XTTS-v2 se descarga al probarla por primera vez, se procesa localmente y su licencia solo permite uso no comercial. El audio de referencia no se incluye en Git. Las voces son perfiles sintéticos propios; no son copias de Alexa ni Siri.
+
+En una instalación nueva, descarga las voces extra con `venv\Scripts\python -m piper.download_voices es_MX-ald-medium --data-dir voces` y `venv\Scripts\python -m piper.download_voices es_ES-sharvard-medium --data-dir voces`.
+
 El micrófono manual muestra la transcripción antes de buscar y presenta las opciones antes de generar el audio. En el chat, **Iniciar llamada** permite seguir conversando sin pulsar el micrófono en cada turno: al hacer una pausa se envía la consulta, se muestran los resultados y, al terminar de hablar el agente, vuelve a escuchar. **Terminar llamada**, salir del chat u ocultar la página detiene la captura. Se solicita permiso de micrófono únicamente al iniciar; el audio se procesa localmente.
 
 La voz seleccionada es Claude high de Piper, con velocidad moderada (`PIPER_LENGTH_SCALE=0.92`). El PIN conserva su ruta protegida y nunca se muestra en la transcripción. Véanse `docs/voz_calidad.md` y `evaluacion/llamada_informe.md` para las pruebas y límites. La integración real con audio sintético y Edge se comprueba con `python evaluacion/integracion_llamada_real.py`; la conversación humana y el ruido de cada micrófono deben probarse en el equipo de uso.

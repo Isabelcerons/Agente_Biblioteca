@@ -37,10 +37,14 @@ class SolicitudChat(BaseModel):
     texto: str
     conversacion_id: str | None = None
     con_audio: bool = False
+    voz_id: str = "claude"
+    acepto_cpml: bool = False
 
 
 class SolicitudTTS(BaseModel):
     texto: str
+    voz_id: str = "claude"
+    acepto_cpml: bool = False
 
 
 class SolicitudCerrarSesion(BaseModel):
@@ -219,6 +223,8 @@ async def chat(solicitud: SolicitudChat, request: Request, response: Response) -
             sintetizado = await run_in_threadpool(
                 tts.sintetizar,
                 resultado.get("respuesta_voz") or "",
+                solicitud.voz_id,
+                solicitud.acepto_cpml,
             )
             resultado["audio_wav_base64"] = base64.b64encode(
                 sintetizado["wav_bytes"]
@@ -1132,6 +1138,8 @@ async def voz(
     response: Response,
     audio: UploadFile = File(...),
     conversacion_id: str | None = Form(default=None),
+    voz_id: str = Form(default="claude"),
+    acepto_cpml: bool = Form(default=False),
 ) -> dict[str, Any] | JSONResponse:
     inicio_total = perf_counter()
     audio_bytes = await audio.read()
@@ -1170,6 +1178,8 @@ async def voz(
         sintetizado = await run_in_threadpool(
             tts.sintetizar,
             resultado.get("respuesta_voz") or "",
+            voz_id,
+            acepto_cpml,
         )
         audio_base64: str | None = base64.b64encode(
             sintetizado["wav_bytes"]
@@ -1214,7 +1224,12 @@ def _registrar_error_voz(conversacion_id: str | None, mensaje: str) -> None:
 @app.post("/api/tts")
 async def sintetizar_texto(solicitud: SolicitudTTS) -> dict[str, Any]:
     try:
-        sintetizado = await run_in_threadpool(tts.sintetizar, solicitud.texto)
+        sintetizado = await run_in_threadpool(
+            tts.sintetizar,
+            solicitud.texto,
+            solicitud.voz_id,
+            solicitud.acepto_cpml,
+        )
     except Exception as error:
         raise HTTPException(
             status_code=503,
@@ -1223,4 +1238,10 @@ async def sintetizar_texto(solicitud: SolicitudTTS) -> dict[str, Any]:
     return {
         "audio_wav_base64": base64.b64encode(sintetizado["wav_bytes"]).decode("ascii"),
         "t_tts_ms": sintetizado["t_tts_ms"],
+        "voz_id": sintetizado["voz_id"],
     }
+
+
+@app.get("/api/voces")
+async def voces_disponibles() -> dict[str, Any]:
+    return {"voces": tts.listar_voces()}

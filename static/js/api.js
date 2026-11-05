@@ -21,6 +21,17 @@ async function solicitar(ruta, opciones = {}, aceptarError = false) {
   return datos;
 }
 
+function preferenciaDeVoz() {
+  try {
+    return {
+      voz_id: localStorage.getItem("biblioteca-voz-agente") || "claude",
+      acepto_cpml: localStorage.getItem("biblioteca-acepto-cpml") === "true",
+    };
+  } catch {
+    return { voz_id: "claude", acepto_cpml: false };
+  }
+}
+
 export function enviarChat(texto, conversacionId, conAudio = false) {
   return solicitar("/api/chat", {
     method: "POST",
@@ -29,23 +40,32 @@ export function enviarChat(texto, conversacionId, conAudio = false) {
       texto,
       conversacion_id: conversacionId || null,
       con_audio: conAudio,
+      ...preferenciaDeVoz(),
     }),
   });
 }
 
 export function enviarVoz(blob, conversacionId) {
   const formulario = new FormData();
+  const voz = preferenciaDeVoz();
   formulario.append("audio", blob, "consulta.wav");
   if (conversacionId) formulario.append("conversacion_id", conversacionId);
+  formulario.append("voz_id", voz.voz_id);
+  formulario.append("acepto_cpml", String(voz.acepto_cpml));
   return solicitar("/api/voz", { method: "POST", body: formulario }, true);
 }
 
 export function sintetizar(texto) {
+  const voz = preferenciaDeVoz();
   return solicitar("/api/tts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ texto }),
+    body: JSON.stringify({ texto, ...voz }),
   });
+}
+
+export function obtenerVoces() {
+  return solicitar("/api/voces");
 }
 
 export function obtenerSalud() {
