@@ -13,6 +13,7 @@ const overlayCuenta = document.querySelector("#cuenta-overlay");
 const botonPlegarCuenta = document.querySelector("#plegar-cuenta");
 const botonLeerVoz = document.querySelector("#leer-voz");
 const selectorVozAgente = document.querySelector("#voz-agente");
+const AVISO_VOZ_PERSONALIZADA = "XTTS-v2 ocupa cerca de 1,9 GB en disco y usa varios GB de RAM. La primera descarga puede tardar; las demás pruebas usan la copia local.";
 const botonProbarVoz = document.querySelector("#probar-voz");
 const reproductorPruebaVoz = document.querySelector("#reproductor-prueba-voz");
 const estadoVoz = document.querySelector("#estado-voz");
@@ -423,6 +424,8 @@ function inicializarPreferencias() {
         vozElegida = "claude";
         selectorVozAgente.value = vozElegida;
         guardarPreferenciaTexto("biblioteca-voz-agente", vozElegida);
+      } else if (vozElegida === "personalizada") {
+        estadoVoz.textContent = AVISO_VOZ_PERSONALIZADA;
       }
       actualizarEspejoVoz();
     } catch {
@@ -448,7 +451,7 @@ function inicializarPreferencias() {
     reproductorPruebaVoz.hidden = true;
     reproductorPruebaVoz.removeAttribute("src");
     estadoVoz.textContent = vozElegida === "personalizada"
-      ? "La primera prueba descarga XTTS-v2 y puede tardar varios minutos. El audio se procesa localmente."
+      ? `${AVISO_VOZ_PERSONALIZADA} El audio se procesa localmente.`
       : "Voz seleccionada. Pulsa «Escuchar prueba» para oírla.";
     actualizarEspejoVoz();
   });
@@ -456,7 +459,7 @@ function inicializarPreferencias() {
     botonProbarVoz.disabled = true;
     reproductorPruebaVoz.hidden = true;
     estadoVoz.textContent = vozElegida === "personalizada"
-      ? "Preparando el modelo XTTS-v2 en este equipo; la primera descarga puede tardar."
+      ? `Preparando XTTS-v2. ${AVISO_VOZ_PERSONALIZADA}`
       : "Generando una muestra de voz…";
     try {
       const muestra = await sintetizar("Hola, soy el agente de la biblioteca. ¿En qué puedo ayudarte?");
