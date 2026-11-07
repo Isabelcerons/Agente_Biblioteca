@@ -32,6 +32,8 @@ let cuenta = null;
 let reservasVista = null;
 let catalogoVista = null;
 let promesaCatalogo = null;
+let investigacionVista = null;
+let promesaInvestigacion = null;
 let promesaReservas = null;
 let chat = null;
 let sesion = null;
@@ -79,6 +81,7 @@ let cerrarMenuEnMovil = () => {};
 
 const nombresVistas = {
   catalogo: "Catálogo",
+  investigacion: "Asistente de investigación",
   chat: "Conversar",
   "mis-reservas": "Mis reservas",
   panel: "Panel técnico",
@@ -154,6 +157,7 @@ function resolverRuta(valor = location.hash.slice(1)) {
   }
   if (ruta === "mis-reservas") return { vista: "mis-reservas", pestana: null, hash: ruta };
   if (ruta === "catalogo") return { vista: "catalogo", pestana: null, hash: ruta };
+  if (ruta === "investigacion") return { vista: "investigacion", pestana: null, hash: ruta };
   if (ruta === "mi-cuenta") return { vista: "chat", pestana: null, hash: "chat", abrirCuenta: true };
   return { vista: "chat", pestana: null, hash: "chat" };
 }
@@ -268,6 +272,23 @@ async function montarCatalogo() {
   return promesaCatalogo;
 }
 
+async function montarInvestigacion() {
+  if (investigacionVista) return investigacionVista.refrescar();
+  if (promesaInvestigacion) return promesaInvestigacion;
+  promesaInvestigacion = (async () => {
+    try {
+      const modulo = await import("./vistas/investigacion.js");
+      investigacionVista = modulo.montarInvestigacion(vistas.get("investigacion"));
+      await investigacionVista.refrescar();
+    } catch {
+      mostrarErrorVista(vistas.get("investigacion"), "No se pudo abrir el Asistente de investigación. Vuelve a intentarlo.");
+    } finally {
+      promesaInvestigacion = null;
+    }
+  })();
+  return promesaInvestigacion;
+}
+
 function cambiarVista(nombre, moverFoco = true) {
   const ruta = resolverRuta(nombre);
   const llave = ruta.vista;
@@ -283,7 +304,9 @@ function cambiarVista(nombre, moverFoco = true) {
   if (ruta.abrirCuenta) abrirPanelCuenta();
   const montar = llave === "panel"
     ? montarPestanaPanel(ruta.pestana)
-    : llave === "mis-reservas" ? montarReservas() : llave === "catalogo" ? montarCatalogo() : Promise.resolve();
+    : llave === "mis-reservas" ? montarReservas()
+      : llave === "catalogo" ? montarCatalogo()
+        : llave === "investigacion" ? montarInvestigacion() : Promise.resolve();
   return montar.then(() => {
     asegurarTitulo(vistaActiva, llave);
     if (moverFoco) vistaActiva.querySelector("h1")?.focus({ preventScroll: true });

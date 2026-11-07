@@ -238,6 +238,20 @@ export function montarChat(contenedor, opciones = {}) {
       rejilla.append(propuesta);
     });
     section.append(rejilla);
+    const accesoInvestigacion = elemento("a", "acceso-investigacion");
+    accesoInvestigacion.href = "#investigacion";
+    const iconoAcceso = elemento("span", "acceso-investigacion__icono");
+    iconoAcceso.setAttribute("aria-hidden", "true");
+    iconoAcceso.innerHTML = iconos.investigar || "";
+    const textoAcceso = elemento("span", "acceso-investigacion__texto");
+    textoAcceso.append(
+      elemento("strong", "", "¿Tienes un trabajo de investigación?"),
+      elemento("span", "", "Abre el Asistente de investigación: libros, tesis, fragmentos y citas APA para tu tema."),
+    );
+    const flechaAcceso = elemento("span", "acceso-investigacion__flecha", "→");
+    flechaAcceso.setAttribute("aria-hidden", "true");
+    accesoInvestigacion.append(iconoAcceso, textoAcceso, flechaAcceso);
+    section.append(accesoInvestigacion);
     mensajesNodo.replaceChildren(section);
   }
 

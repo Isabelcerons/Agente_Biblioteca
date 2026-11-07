@@ -26,6 +26,7 @@ export const alerta = svg('<path d="m12 3 9 16H3z"/><path d="M12 9v4m0 3h.01"/>'
 export const check = svg('<path d="m5 12 4 4L19 6"/>');
 export const x = svg('<path d="m6 6 12 12M18 6 6 18"/>');
 export const buscar = svg('<circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/>');
+export const investigar = svg('<path d="M4 19.5V5a2 2 0 0 1 2-2h9l3 3v4"/><path d="M8 7h5M8 11h3M4 19.5A1.5 1.5 0 0 0 5.5 21H10"/><circle cx="16" cy="16" r="3.5"/><path d="m18.6 18.6 2.4 2.4"/>');
 export const filtro = svg('<path d="M3 5h18l-7 8v5l-4 3v-8z"/>');
 
 export const iconos = {
@@ -51,4 +52,5 @@ export const iconos = {
   x,
   buscar,
   filtro,
+  investigar,
 };

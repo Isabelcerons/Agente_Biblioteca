@@ -254,6 +254,19 @@ def _armar_ieee(fila: dict[str, Any], numero: int) -> tuple[str, str, str]:
     return referencia, referencia_html, primer_apellido
 
 
+def referencia_apa_catalogo(fila: dict[str, Any]) -> str | None:
+    """Formatea una fila existente; omite referencias con metadatos insuficientes."""
+    if any(not str(fila.get(campo) or "").strip()
+           for campo in ("autor", "titulo", "editorial", "anio")):
+        return None
+    try:
+        texto, _, _ = _armar_apa(fila)
+        _verificar_referencia({"texto": texto, "titulo": fila["titulo"]}, fila)
+        return texto
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def generar_bibliografia(
     tema: str, cantidad: int = 5, norma: str = "APA"
 ) -> dict[str, Any]:

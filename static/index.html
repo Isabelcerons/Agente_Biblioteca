@@ -23,6 +23,7 @@
   <link rel="stylesheet" href="/static/css/base.css">
   <link rel="stylesheet" href="/static/css/componentes.css">
   <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="stylesheet" href="/static/css/investigacion.css">
   <script type="module" src="/static/js/app.js"></script>
 </head>
 <body>
@@ -105,6 +106,7 @@
       <nav class="navegacion" aria-label="Vistas">
         <a href="#chat" data-vista="chat" aria-label="Chat"><span data-icono="chat"></span><span>Chat</span></a>
         <a href="#catalogo" data-vista="catalogo" aria-label="Catálogo"><span data-icono="catalogo"></span><span>Catálogo</span></a>
+        <a href="#investigacion" data-vista="investigacion" aria-label="Asistente de investigación"><span data-icono="investigar"></span><span>Investigar</span></a>
         <a href="#mi-cuenta" data-vista="mi-cuenta" aria-label="Mi cuenta"><span data-icono="usuario"></span><span>Mi cuenta</span></a>
         <a href="#mis-reservas" data-vista="mis-reservas" aria-label="Mis reservas"><span data-icono="reservar"></span><span>Mis reservas</span></a>
       </nav>
@@ -150,6 +152,7 @@
     <main class="zona-central">
       <div class="vistas">
         <section class="vista vista--activa" id="vista-chat" data-contenedor-vista="chat" aria-labelledby="titulo-chat"></section>
+        <section class="vista investigacion" id="vista-investigacion" data-contenedor-vista="investigacion" aria-labelledby="titulo-investigacion" hidden></section>
         <section class="vista catalogo" id="vista-catalogo" data-contenedor-vista="catalogo" aria-labelledby="titulo-catalogo" hidden></section>
         <section class="vista vista-reservas" id="vista-mis-reservas" data-contenedor-vista="mis-reservas" aria-labelledby="titulo-mis-reservas" hidden>
           <h1 id="titulo-mis-reservas" tabindex="-1">Mis reservas</h1>
@@ -188,6 +191,7 @@
     <nav class="navegacion-movil" aria-label="Navegación inferior">
       <a href="#chat" data-vista="chat" aria-label="Chat"><span data-icono="chat"></span><small>Chat</small></a>
       <a href="#catalogo" data-vista="catalogo" aria-label="Catálogo"><span data-icono="catalogo"></span><small>Catálogo</small></a>
+      <a href="#investigacion" data-vista="investigacion" aria-label="Asistente de investigación"><span data-icono="investigar"></span><small>Investigar</small></a>
       <a href="#mis-reservas" data-vista="mis-reservas" aria-label="Mis reservas"><span data-icono="reservar"></span><small>Reservas</small></a>
       <a href="#mi-cuenta" data-vista="mi-cuenta" aria-label="Mi cuenta"><span data-icono="usuario"></span><small>Mi cuenta</small></a>
     </nav>

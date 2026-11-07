@@ -17,10 +17,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from starlette.concurrency import run_in_threadpool
 
-from app import agente, auth, herramientas, mapa, rag, repositorio, stt, tts
+from app import agente, auth, herramientas, investigacion, mapa, rag, repositorio, stt, tts
 from app.config import KEEP_ALIVE, LLM_MODEL, LLM_MODEL_REDACCION, NUM_CTX, OLLAMA_HOST
 from app.db import conexion
 from app.formatos import fecha_es
@@ -54,6 +54,16 @@ class SolicitudCerrarSesion(BaseModel):
 class SolicitudLogin(BaseModel):
     codigo: str
     pin: str
+
+
+class SolicitudInvestigacion(BaseModel):
+    tema: str = Field(min_length=1, max_length=500, strict=True)
+    programa: str | None = Field(default=None, min_length=1, max_length=160, strict=True)
+
+    @field_validator("tema", "programa", mode="before")
+    @classmethod
+    def limpiar_texto(cls, valor):
+        return valor.strip() if isinstance(valor, str) else valor
 
 
 def _serializar(valor: Any) -> Any:
@@ -187,6 +197,17 @@ async def manejar_error(_: Request, error: Exception) -> JSONResponse:
 @app.get("/", include_in_schema=False)
 async def inicio() -> HTMLResponse:
     return HTMLResponse(await run_in_threadpool(_html_interfaz))
+
+
+@app.post("/api/investigacion", response_model=None)
+async def asistir_investigacion(solicitud: SolicitudInvestigacion) -> dict[str, Any] | JSONResponse:
+    try:
+        return await run_in_threadpool(investigacion.investigar, solicitud.tema, solicitud.programa)
+    except Exception:
+        _LOGGER.exception("No fue posible consultar la evidencia de investigación.")
+        return JSONResponse(status_code=503, content=investigacion.resultado_vacio(
+            solicitud.tema, "No fue posible consultar la evidencia indexada. Inténtalo de nuevo."
+        ))
 
 
 @app.post("/api/chat")

@@ -127,6 +127,14 @@ export function obtenerMaterial(id) {
   return solicitar(`/api/material/${encodeURIComponent(id)}`);
 }
 
+export function investigar(tema, programa = null) {
+  return solicitar("/api/investigacion", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tema, programa: programa || null }),
+  }, true);
+}
+
 export function obtenerCatalogo(parametros = {}) {
   return solicitar(`/api/catalogo?${new URLSearchParams(parametros)}`);
 }
