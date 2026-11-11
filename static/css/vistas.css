@@ -448,6 +448,18 @@
   font-weight: 600;
 }
 
+/* Oculta avisos vacíos o con atributo hidden para evitar barras vacías */
+.aviso:empty,
+.aviso[hidden],
+[data-mensaje]:empty,
+[data-mensaje][hidden] {
+  display: none !important;
+}
+
+#titulo-mis-reservas {
+  font-family: Fraunces, Georgia, serif;
+}
+
 .vistas--mis-reservas {
   gap: var(--espacio-8);
 }

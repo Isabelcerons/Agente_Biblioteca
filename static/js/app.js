@@ -2,9 +2,10 @@ import { iconos } from "./iconos.js";
 import { iniciarTema } from "./tema.js";
 import { montarChat } from "./chat.js";
 import { montarCuenta } from "./cuenta.js";
-import { cancelarReserva, cerrarSesion, obtenerAvisosDisponibilidad, obtenerVoces, sintetizar } from "./api.js";
+import { adoptarConversacion, cancelarReserva, cerrarSesion, obtenerAvisosDisponibilidad, obtenerVoces, prepararVoz, sintetizar } from "./api.js";
 import { montarSesion } from "./sesion.js";
 import { montarTesis } from "./tesis.js";
+import { detenerAudioActual } from "./voz.js";
 
 const raiz = document.querySelector(".app-shell");
 const panelCuenta = document.querySelector("#panel-cuenta");
@@ -14,9 +15,12 @@ const botonPlegarCuenta = document.querySelector("#plegar-cuenta");
 const botonLeerVoz = document.querySelector("#leer-voz");
 const selectorVozAgente = document.querySelector("#voz-agente");
 const AVISO_VOZ_PERSONALIZADA = "XTTS-v2 ocupa cerca de 1,9 GB en disco y usa varios GB de RAM. La primera descarga puede tardar; las demás pruebas usan la copia local.";
+const TEXTO_PRUEBA_VOZ = "Hola, soy el agente de la biblioteca. ¿En qué puedo ayudarte?";
+const MUESTRAS_VOZ = new Map();
 const botonProbarVoz = document.querySelector("#probar-voz");
 const reproductorPruebaVoz = document.querySelector("#reproductor-prueba-voz");
 const estadoVoz = document.querySelector("#estado-voz");
+const CLAVE_LEER_VOZ = "biblioteca-leer-voz-v2";
 const botonMenuMovil = document.querySelector("#abrir-menu-movil");
 const menuMovil = document.querySelector("#menu-movil");
 const contenidoMenuMovil = document.querySelector("#contenido-menu-movil");
@@ -415,9 +419,44 @@ async function consultarSalud() {
 
 function inicializarPreferencias() {
   iniciarTema();
-  let leerVoz = cargarPreferencia("biblioteca-leer-voz", false);
+  let leerVoz = cargarPreferencia(CLAVE_LEER_VOZ, false);
   let vozElegida = cargarPreferenciaTexto("biblioteca-voz-agente", "claude");
+  let generacionPruebaVoz = 0;
+  let preparacionVozActual = 0;
   selectorVozAgente.value = vozElegida;
+
+  async function esperarVozLista(vozId, tiempoMaximo = 30000, intervalo = 1000) {
+    const inicio = Date.now();
+    while (Date.now() - inicio < tiempoMaximo) {
+      try {
+        const respuesta = await obtenerVoces();
+        const voz = (respuesta.voces || []).find((item) => item.id === vozId);
+        if (voz?.lista) return true;
+      } catch {
+        // Reintenta hasta cumplir el tiempo máximo de espera.
+      }
+      await new Promise((resolver) => window.setTimeout(resolver, intervalo));
+    }
+    return false;
+  }
+
+  async function prepararYEsperarVoz(vozId) {
+    const token = ++preparacionVozActual;
+    if (vozId === "personalizada") {
+      estadoVoz.textContent = "La voz personalizada (XTTS) es lenta en este equipo: la primera respuesta puede tardar 30–60 s.";
+      return;
+    }
+    estadoVoz.textContent = "Preparando la voz…";
+    try {
+      await prepararVoz(vozId);
+    } catch {
+      // La preparación se reintenta en la siguiente comprobación de disponibilidad.
+    }
+    const lista = await esperarVozLista(vozId);
+    if (token !== preparacionVozActual) return;
+    estadoVoz.textContent = lista ? "Voz lista." : "Voz activada para tus respuestas del chat.";
+  }
+
   const actualizarEspejoVoz = () => {
     const espejo = contenidoMenuMovil?.querySelector("[data-espejo-voz-select]");
     if (!espejo) return;
@@ -455,6 +494,7 @@ function inicializarPreferencias() {
       estadoVoz.textContent = "No se pudo cargar la lista de voces.";
     }
   };
+
   selectorVozAgente.addEventListener("change", () => {
     const anterior = vozElegida;
     if (selectorVozAgente.value === "personalizada"
@@ -469,26 +509,56 @@ function inicializarPreferencias() {
       }
       guardarPreferenciaTexto("biblioteca-acepto-cpml", "true");
     }
+    generacionPruebaVoz += 1;
+    detenerAudioActual();
+    reproductorPruebaVoz.pause();
+    reproductorPruebaVoz.currentTime = 0;
+    reproductorPruebaVoz.removeAttribute("src");
+    reproductorPruebaVoz.load();
     vozElegida = selectorVozAgente.value;
     guardarPreferenciaTexto("biblioteca-voz-agente", vozElegida);
     reproductorPruebaVoz.hidden = true;
     reproductorPruebaVoz.removeAttribute("src");
-    estadoVoz.textContent = vozElegida === "personalizada"
-      ? `${AVISO_VOZ_PERSONALIZADA} El audio se procesa localmente.`
-      : "Voz seleccionada. Pulsa «Escuchar prueba» para oírla.";
+    if (vozElegida === "personalizada") {
+      estadoVoz.textContent = "La voz personalizada (XTTS) es lenta en este equipo: la primera respuesta puede tardar 30–60 s.";
+    } else {
+      void prepararYEsperarVoz(vozElegida);
+      estadoVoz.textContent = "Preparando la voz…";
+    }
     actualizarEspejoVoz();
   });
   botonProbarVoz.addEventListener("click", async () => {
+    if (chat?.leerUltimaRespuesta?.()) {
+      estadoVoz.textContent = "Leyendo la última respuesta del chat…";
+      return;
+    }
     botonProbarVoz.disabled = true;
+    const generacion = generacionPruebaVoz;
     reproductorPruebaVoz.hidden = true;
+    const muestraCache = MUESTRAS_VOZ.get(vozElegida);
+    if (muestraCache) {
+      reproductorPruebaVoz.src = muestraCache;
+      reproductorPruebaVoz.hidden = false;
+      try {
+        await reproductorPruebaVoz.play().catch(() => {});
+        estadoVoz.textContent = "Reproduciendo muestra de voz.";
+      } finally {
+        botonProbarVoz.disabled = false;
+      }
+      return;
+    }
     estadoVoz.textContent = vozElegida === "personalizada"
       ? `Preparando XTTS-v2. ${AVISO_VOZ_PERSONALIZADA}`
       : "Generando una muestra de voz…";
     try {
-      const muestra = await sintetizar("Hola, soy el agente de la biblioteca. ¿En qué puedo ayudarte?");
-      reproductorPruebaVoz.src = `data:audio/wav;base64,${muestra.audio_wav_base64}`;
+      const muestra = await sintetizar(TEXTO_PRUEBA_VOZ);
+      if (generacion !== generacionPruebaVoz) return;
+      const src = `data:audio/wav;base64,${muestra.audio_wav_base64}`;
+      MUESTRAS_VOZ.set(vozElegida, src);
+      reproductorPruebaVoz.src = src;
       reproductorPruebaVoz.hidden = false;
-      estadoVoz.textContent = "Muestra lista. Pulsa reproducir para escucharla.";
+      await reproductorPruebaVoz.play().catch(() => {});
+      estadoVoz.textContent = muestra.aviso || "Reproduciendo muestra de voz.";
     } catch (error) {
       estadoVoz.textContent = error.message || "No se pudo generar la muestra.";
     } finally {
@@ -496,15 +566,25 @@ function inicializarPreferencias() {
     }
   });
   const establecer = () => {
+    const estadoTexto = leerVoz ? "Lectura en voz alta activada" : "Leer respuestas en voz alta";
     botonLeerVoz.setAttribute("aria-pressed", String(leerVoz));
-    botonLeerVoz.title = leerVoz ? "Desactivar lectura en voz alta" : "Activar lectura en voz alta";
+    botonLeerVoz.setAttribute("aria-label", leerVoz ? "Desactivar lectura en voz alta" : "Activar lectura en voz alta");
+    botonLeerVoz.title = botonLeerVoz.getAttribute("aria-label");
+    const etiqueta = botonLeerVoz.querySelector("span:last-child");
+    if (etiqueta) etiqueta.textContent = estadoTexto;
     chat?.establecerPreferencias({ voz: leerVoz });
     const espejoVoz = contenidoMenuMovil?.querySelector("[data-espejo-voz]");
-    if (espejoVoz) espejoVoz.setAttribute("aria-pressed", String(leerVoz));
+    if (espejoVoz) {
+      espejoVoz.setAttribute("aria-pressed", String(leerVoz));
+      espejoVoz.setAttribute("aria-label", botonLeerVoz.getAttribute("aria-label"));
+      const etiquetaEspejo = espejoVoz.querySelector("span:last-child");
+      if (etiquetaEspejo) etiquetaEspejo.textContent = estadoTexto;
+    }
   };
   botonLeerVoz.addEventListener("click", () => {
     leerVoz = !leerVoz;
-    guardarPreferencia("biblioteca-leer-voz", leerVoz);
+    guardarPreferencia(CLAVE_LEER_VOZ, leerVoz);
+    try { localStorage.removeItem("biblioteca-leer-voz"); } catch { /* Se ignora la preferencia legacy. */ }
     establecer();
   });
   document.querySelectorAll(".navegacion a").forEach((enlace) => { enlace.title = enlace.getAttribute("aria-label"); });
@@ -547,7 +627,11 @@ cuenta = montarCuenta(contenidoCuenta, {
   alLogin: () => sesion?.mostrarLogin(),
   alCancelar: cancelarReserva,
   alCerrar: async () => {
-    await cerrarSesion();
+    try {
+      await cerrarSesion();
+    } catch {
+      // Ignorar fallo de red para siempre permitir cerrar en cliente
+    }
     chat?.limpiar();
     chat?.restablecerIdentidad();
     cuenta.limpiar();
@@ -703,24 +787,84 @@ tesis = montarTesis({
   enviarPregunta: (texto) => chat?.enviarTexto(texto),
   resaltarMaterial,
 });
+const mostrarBienvenidaSegura = async () => {
+  try {
+    if (chat?.asegurarBienvenidaSalas) {
+      await chat.asegurarBienvenidaSalas();
+      return;
+    }
+    chat?.mostrarBienvenidaSalas?.();
+  } catch {
+    try {
+      chat?.mostrarBienvenida?.("Hola. ¿Qué quieres explorar hoy?");
+    } catch {
+      // La sesión de entrada debe seguir funcionando aunque la bienvenida falle.
+    }
+  }
+};
+
+const ofrecerReintentoSeguro = (texto) => {
+  if (!texto) return;
+  try {
+    chat?.ofrecerReintento?.(texto);
+  } catch {
+    // Si la restauración del vehículo de chat falla, no bloqueamos el acceso.
+  }
+};
+
 sesion = montarSesion({
-  alEntrar: (usuario, mensajeBienvenida, avisos, textoPendiente) => {
-    chat.limpiar();
-    chat.establecerIdentidad(usuario);
-    void (async () => {
-      const restaurada = await chat.restaurarConversacion();
-      if (!restaurada) chat.mostrarBienvenida(mensajeBienvenida, avisos);
-      if (textoPendiente) chat.ofrecerReintento(textoPendiente);
-    })();
+  alEntrar: async (usuario, mensajeBienvenida, avisos, textoPendiente, restaurarHistorico = false) => {
+    try {
+      const tieneMensajes = Boolean(chat?.tieneMensajes?.());
+      const usuarioPrevio = chat?.obtenerUsuario?.();
+      const conversacionActual = chat?.obtenerConversacionId?.();
+
+      // Caso 1: Invitado con mensajes en pantalla inicia sesión -> conservar y adoptar
+      if (!usuarioPrevio && tieneMensajes && conversacionActual) {
+        try {
+          await adoptarConversacion(conversacionActual);
+        } catch {
+          // Si la conversación ya era del mismo usuario o no se pudo adoptar, se conserva la pantalla actual.
+        }
+        chat?.establecerIdentidad?.(usuario);
+        if (textoPendiente) ofrecerReintentoSeguro(textoPendiente);
+        return;
+      }
+
+      // Caso 2: Login normal o cambio de perfil -> restaurar historial del usuario + bienvenida sin duplicar
+      chat?.establecerIdentidad?.(usuario);
+      try {
+        const restaurada = await chat?.restaurarConversacion?.();
+        if (restaurarHistorico) {
+          // Recarga F5: si el usuario no tenía mensajes previos, asegurar bienvenida de sala
+          if (!restaurada) {
+            await chat?.asegurarBienvenidaSalas?.();
+          }
+        } else {
+          // Iniciar sesión (formulario/login explícito): restaurar SIEMPRE + bienvenida al final sin duplicar
+          await chat?.asegurarBienvenidaSalas?.();
+        }
+      } catch {
+        await mostrarBienvenidaSegura();
+      }
+
+      if (textoPendiente) ofrecerReintentoSeguro(textoPendiente);
+    } catch {
+      await mostrarBienvenidaSegura();
+      if (textoPendiente) ofrecerReintentoSeguro(textoPendiente);
+    }
   },
   alInvitado: () => {
-    chat.limpiar();
-    chat.establecerIdentidad(null, true);
+    const tieneMensajes = Boolean(chat?.tieneMensajes?.());
+    chat?.establecerIdentidad?.(null, true);
+    if (!tieneMensajes) {
+      void mostrarBienvenidaSegura();
+    }
   },
   alExpirar: () => {
-    chat.limpiar();
-    chat.restablecerIdentidad();
-    cuenta.limpiar();
+    chat?.limpiar?.();
+    chat?.restablecerIdentidad?.();
+    cuenta?.limpiar?.();
   },
 });
 window.addEventListener("biblioteca-sesion-expirada", () => sesion?.expirar());

@@ -7,6 +7,7 @@ RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
 
 from playwright.sync_api import sync_playwright
+from base_datos import ejecutar
 from evaluacion.evaluar import (
     capturar_base, restaurar_base, capturar_estado_autenticacion,
     restaurar_estado_autenticacion, capturar_ids_sesiones, cerrar_sesiones_nuevas,
@@ -14,10 +15,12 @@ from evaluacion.evaluar import (
 
 
 def main():
+    ejecutar("UPDATE public.reservas SET estado = 'activa', expira_en = now() + interval '48 hours' WHERE id = 1")
     base = capturar_base()
     estado = capturar_estado_autenticacion()
     sesiones = capturar_ids_sesiones()
     errores = []
+    errores_consola = []
     comprobaciones = []
     carpeta = RAIZ / "evaluacion"
     try:
@@ -26,10 +29,26 @@ def main():
             contexto = navegador.new_context(viewport={"width": 1440, "height": 1000})
             pagina = contexto.new_page()
             pagina.on("pageerror", lambda error: errores.append(str(error)))
+            pagina.on("console", lambda mensaje: errores_consola.append(mensaje.text) if mensaje.type == "error" else None)
             pagina.goto("http://127.0.0.1:8000")
             pagina.locator("#entrar-invitado").click()
-            assert pagina.locator(".navegacion").inner_text().splitlines() == ["Chat", "Catálogo", "Mi cuenta", "Mis reservas"]
-            comprobaciones.append("Menú con catálogo y cuatro entradas")
+            assert pagina.locator(".navegacion").inner_text().splitlines() == ["Chat", "Catálogo", "Investigar", "Mi cuenta", "Mis reservas"]
+            comprobaciones.append("Menú con cinco entradas exactas")
+            boton_nueva = pagina.locator("#nueva-conversacion")
+            assert boton_nueva.is_visible()
+            assert boton_nueva.evaluate("(nodo) => nodo.scrollHeight <= nodo.clientHeight + 4")
+            comprobaciones.append("Botón Nueva conversación visible y sin partir en escritorio")
+            cantidad_errores = len(errores)
+            cantidad_errores_consola = len(errores_consola)
+            pagina.locator('.navegacion [data-vista="investigacion"]').click()
+            pagina.locator("#vista-investigacion").wait_for(state="visible")
+            assert pagina.locator("#titulo-investigacion").inner_text() == "Asistente de investigación"
+            pagina.set_viewport_size({"width": 390, "height": 844})
+            assert pagina.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert errores[cantidad_errores:] == [], errores[cantidad_errores:]
+            assert errores_consola[cantidad_errores_consola:] == [], errores_consola[cantidad_errores_consola:]
+            comprobaciones.append("Navegación a Investigación, título visible y móvil sin errores ni desborde")
+            pagina.set_viewport_size({"width": 1440, "height": 1000})
             for nombre in ("mapa", "sql", "bitacora"):
                 pagina.evaluate("(ruta) => location.hash = ruta", f"panel/{nombre}")
                 panel = pagina.locator(f'[data-panel-contenido="{nombre}"]')

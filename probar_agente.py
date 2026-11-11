@@ -7,6 +7,7 @@ from typing import Any
 from app import auth, herramientas
 from app.agente import procesar_mensaje
 from app.db import conexion
+from refrescar_demo import refrescar_demo
 
 _resultados: list[tuple[str, bool, str]] = []
 _tiempos: list[int] = []
@@ -153,6 +154,7 @@ def _limpiar_pruebas() -> None:
 
 def main() -> None:
     global _prestamo_revertir, _estado_pin_revertir, _estados_pin_revertir
+    refrescar_demo()
     _preparar_limpieza_reserva()
     _estado_pin_revertir = _guardar_estado_pin("107")
     _estados_pin_revertir = [

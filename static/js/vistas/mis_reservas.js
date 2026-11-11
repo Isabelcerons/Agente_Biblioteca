@@ -54,15 +54,19 @@ export function montarMisReservas(contenedor) {
   let destruida = false;
   let actualizacionLocal = false;
   const tituloDialogo = `mis-reservas-dialogo-${++siguienteDialogo}`;
+  const tituloExistente = document.getElementById("titulo-mis-reservas");
+  if (tituloExistente) {
+    tituloExistente.textContent = "Mis reservas";
+  }
 
   contenedor.innerHTML = `
-    <section class="vistas vistas--mis-reservas" aria-labelledby="mis-reservas-titulo">
+    <section class="vistas vistas--mis-reservas" aria-labelledby="titulo-mis-reservas">
       <header class="vistas__encabezado">
-        <h1 id="mis-reservas-titulo">Mis reservas</h1>
+        ${tituloExistente ? "" : '<h1 id="titulo-mis-reservas">Mis reservas</h1>'}
         <p>Las reservas se guardan 48 horas. Pasa por la biblioteca con tu carné.</p>
       </header>
       <p class="sr-only" data-estado role="status" aria-live="polite"></p>
-      <div class="aviso" data-mensaje role="status" aria-live="polite" hidden></div>
+      <div class="aviso" data-mensaje role="status" aria-live="polite" hidden style="display: none;"></div>
       <section data-activos aria-label="Reservas activas"></section>
       <section data-historial aria-labelledby="mis-reservas-historial-titulo" hidden></section>
       <dialog class="mis-reservas__dialogo" aria-labelledby="${tituloDialogo}">
@@ -86,10 +90,16 @@ export function montarMisReservas(contenedor) {
   const botonConfirmar = contenedor.querySelector("[data-confirmar]");
   const botonVolver = contenedor.querySelector("[data-volver]");
   let reservaPendiente = null;
+  mensaje.style.display = "none";
 
   function mostrarMensaje(texto, error = false) {
     mensaje.textContent = texto;
     mensaje.hidden = !texto;
+    if (texto) {
+      mensaje.style.removeProperty("display");
+    } else {
+      mensaje.style.display = "none";
+    }
     mensaje.className = `aviso${error ? " aviso--error" : " aviso--info"}`;
     mensaje.setAttribute("role", error ? "alert" : "status");
   }

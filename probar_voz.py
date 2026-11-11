@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.tts import sintetizar
+from refrescar_demo import refrescar_demo
 
 _RAIZ = Path(__file__).resolve().parent
 _CARPETA_AUDIOS = _RAIZ / "evaluacion" / "audios"
@@ -79,6 +80,7 @@ def _herramienta_esperada(
 
 
 def _ejecutar() -> None:
+    refrescar_demo()
     _CARPETA_AUDIOS.mkdir(parents=True, exist_ok=True)
     with TestClient(app) as cliente:
         for numero, (nombre, pregunta, palabras, caso_herramienta) in enumerate(

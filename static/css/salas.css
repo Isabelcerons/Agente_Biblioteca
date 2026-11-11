@@ -1,0 +1,1017 @@
+/* ==========================================================================
+   Biblioteca UniPutumayo — Estilos de Salas Temáticas y Bibliotecarios
+   Lenguaje visual: estantería viva de lomos que respiran, polvo dorado sutil,
+   brillo de latón cálido y verde biblioteca (coherente con escena.css y login.css).
+   Incluye soporte para versión completa y versión compacta para burbujas de chat.
+   Cumple accesibilidad (WCAG AA), temas claro/oscuro y prefers-reduced-motion.
+   ========================================================================== */
+
+/* 1. Variables de color y dimensiones para salas */
+:root {
+  --color-sala-ingenieria: #B54A3C;
+  --color-sala-ingenieria-oscuro: #F08A7C;
+  --color-sala-agro: #2E7D4F;
+  --color-sala-agro-oscuro: #6CC08F;
+  --color-sala-admin: #8B5E3C;
+  --color-sala-admin-oscuro: #D9A577;
+  --color-sala-contaduria: #7A4E9C;
+  --color-sala-contaduria-oscuro: #C29BE8;
+  --color-sala-investigacion: #A07A00;
+  --color-sala-investigacion-oscuro: #E8C14A;
+  --color-sala-todas: var(--laton, #C9A227);
+  --color-sala-todas-oscuro: #E3B84E;
+
+  --color-sala-defecto: var(--laton, #C9A227);
+  --sala-puerta-radio: var(--radio-lg, 16px);
+}
+
+[data-tema="oscuro"] {
+  --color-sala-defecto: #E3B84E;
+}
+
+/* 2. Contenedor del selector de bienvenida a las salas (versión estándar) */
+.salas-selector {
+  position: relative;
+  width: min(1120px, 100%);
+  margin-inline: auto;
+  padding: clamp(16px, 3vw, 36px) clamp(12px, 2.5vw, 24px);
+  box-sizing: border-box;
+}
+
+/* Versión compacta para incrustar dentro de la burbuja del chat */
+.salas-selector--compacto {
+  width: 100%;
+  padding: 6px 0 2px;
+  margin: 8px 0 0;
+}
+
+.salas-menu {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.salas-menu__boton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  background: var(--superficie);
+  color: var(--texto);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--sombra);
+  transition: background-color 180ms var(--ease), border-color 180ms var(--ease), transform 180ms var(--ease);
+}
+
+.salas-menu--escena {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+  width: 100%;
+}
+
+.salas-menu--escena .salas-menu__boton {
+  min-height: 38px;
+  padding: 9px 16px;
+  border-radius: 14px;
+  box-shadow: 0 12px 30px rgb(18 12 4 / 12%);
+}
+
+.salas-menu__boton:hover,
+.salas-menu__boton:focus-visible,
+.salas-menu__boton[aria-expanded="true"] {
+  border-color: var(--laton);
+  background: color-mix(in srgb, var(--verde-claro) 60%, var(--superficie));
+}
+
+.salas-menu__boton--compact {
+  min-height: 32px;
+  padding: 7px 10px;
+  font-size: 0.78rem;
+}
+
+.salas-menu__panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: min(380px, calc(100vw - 20px));
+  max-width: min(420px, 90vw);
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--borde);
+  border-radius: 14px;
+  background: var(--superficie);
+  box-shadow: 0 18px 44px rgb(24 19 11 / 18%);
+}
+
+.salas-menu__panel[hidden] {
+  display: none;
+}
+
+.salas-menu__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 58px;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--texto);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.salas-menu__item:hover,
+.salas-menu__item:focus-visible,
+.salas-menu__item[aria-checked="true"] {
+  background: color-mix(in srgb, var(--verde-claro) 75%, var(--superficie));
+  border-color: color-mix(in srgb, var(--laton) 35%, var(--borde));
+}
+
+.salas-menu__icono {
+  font-size: 1rem;
+}
+
+.salas-menu__nombre {
+  display: block;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.35;
+  font-weight: 700;
+}
+
+.salas-menu__meta {
+  display: block;
+  color: var(--texto-sec);
+  font-size: 0.72rem;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.salas-menu__conteo {
+  font-size: 0.7rem;
+  color: var(--texto-sec);
+  white-space: nowrap;
+}
+
+.aviso:empty,
+.servicio-aviso:empty {
+  display: none;
+}
+
+@media (max-width: 420px) {
+  .salas-menu__panel {
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(94vw, 320px);
+    min-width: 0;
+  }
+
+  .salas-menu__item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .salas-menu__conteo {
+    grid-column: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .salas-menu__boton,
+  .salas-menu__panel,
+  .salas-menu__item {
+    transition: none;
+  }
+}
+
+/* 3. Encabezado centrado con tipografía Fraunces (serif) */
+.salas-encabezado {
+  text-align: center;
+  max-width: 680px;
+  margin-inline: auto;
+  margin-bottom: clamp(20px, 3.5vw, 36px);
+}
+
+.salas-selector--compacto .salas-encabezado {
+  text-align: left;
+  margin-bottom: 12px;
+}
+
+.salas-emblema {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+  font-size: 1.6rem;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, rgb(255 244 190 / 60%), rgb(201 162 39 / 25%) 60%, transparent 100%),
+    color-mix(in srgb, var(--superficie) 80%, var(--laton));
+  border: 1px solid color-mix(in srgb, var(--laton) 45%, transparent);
+  box-shadow: 0 4px 16px rgb(201 162 39 / 24%), inset 0 1px 3px rgb(255 255 255 / 60%);
+}
+
+[data-tema="oscuro"] .salas-emblema {
+  background:
+    radial-gradient(circle at 35% 30%, rgb(227 184 78 / 40%), rgb(201 162 39 / 15%) 70%, transparent 100%),
+    color-mix(in srgb, var(--superficie) 85%, var(--laton));
+  box-shadow: 0 6px 20px rgb(0 0 0 / 40%), 0 0 14px rgb(227 184 78 / 30%);
+}
+
+.salas-titulo {
+  font-family: Fraunces, Georgia, serif;
+  font-size: clamp(1.5rem, 3.2vw, 2.25rem);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--texto);
+  margin: 0 0 10px 0;
+  letter-spacing: -0.015em;
+}
+
+.salas-selector--compacto .salas-titulo {
+  font-size: 1.05rem;
+  margin-bottom: 4px;
+}
+
+.salas-subtitulo {
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  font-size: clamp(0.92rem, 1.4vw, 1.05rem);
+  line-height: 1.55;
+  color: var(--texto-sec);
+  margin: 0;
+}
+
+.salas-selector--compacto .salas-subtitulo {
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+/* 4. Cuadrícula adaptativa de tarjetas-puerta */
+.salas-rejilla {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: clamp(14px, 2vw, 22px);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+  .salas-rejilla {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1100px) {
+  .salas-rejilla {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Cuadrícula para burbujas de chat (versión compacta) */
+.salas-rejilla--compacta {
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+@media (min-width: 520px) {
+  .salas-rejilla--compacta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* 5. Tarjeta-Puerta (botón accesible con perspectiva 3D) */
+.salas-tarjeta-puerta {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  perspective: 1000px;
+  outline: none;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: var(--sala-puerta-radio);
+  position: relative;
+}
+
+/* Foco visible accesible de alto contraste */
+.salas-tarjeta-puerta:focus-visible {
+  outline: 3px solid var(--foco, var(--laton));
+  outline-offset: 4px;
+}
+
+/* Marco exterior de la puerta (estilo madera de roble/nogal de biblioteca) */
+.salas-tarjeta-puerta__marco {
+  position: relative;
+  border-radius: var(--sala-puerta-radio);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--madera, #8B5E3C) 20%, var(--superficie)) 0%,
+      color-mix(in srgb, var(--madera, #8B5E3C) 10%, var(--superficie)) 100%
+    );
+  padding: 4px;
+  box-sizing: border-box;
+  box-shadow: 0 4px 14px rgb(83 55 31 / 7%);
+  transition: transform var(--dur, 220ms) var(--ease),
+              box-shadow var(--dur, 220ms) var(--ease);
+}
+
+.salas-tarjeta-puerta--compacta .salas-tarjeta-puerta__marco {
+  padding: 3px;
+  border-radius: calc(var(--sala-puerta-radio) - 2px);
+}
+
+[data-tema="oscuro"] .salas-tarjeta-puerta__marco {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--madera, #8B5E3C) 26%, var(--superficie)) 0%,
+      color-mix(in srgb, var(--superficie) 85%, #000) 100%
+    );
+  box-shadow: 0 6px 20px rgb(0 0 0 / 35%);
+}
+
+/* Hoja batiente de la puerta (realiza la rotación 3D y brillo latón) */
+.salas-tarjeta-puerta__hoja {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 275px;
+  padding: 20px 18px 16px;
+  border-radius: calc(var(--sala-puerta-radio) - 3px);
+  background:
+    radial-gradient(circle at 50% 15%, rgb(201 162 39 / 6%), transparent 60%),
+    var(--superficie);
+  border: 1px solid var(--borde);
+  box-shadow: var(--sombra);
+  box-sizing: border-box;
+  transform-origin: left center;
+  overflow: hidden;
+  transition:
+    transform var(--dur, 220ms) var(--ease),
+    box-shadow var(--dur, 220ms) var(--ease),
+    border-color var(--dur, 220ms) var(--ease),
+    background-color var(--dur, 220ms) var(--ease);
+}
+
+/* Hoja en versión compacta de chat */
+.salas-tarjeta-puerta--compacta .salas-tarjeta-puerta__hoja {
+  min-height: 155px;
+  padding: 12px 14px 10px;
+  gap: 8px;
+  border-radius: calc(var(--sala-puerta-radio) - 4px);
+}
+
+/* Efecto de apertura 3D + BRILLO DE LATÓN CÁLIDO al pasar el mouse (hover/foco)
+   Mismo lenguaje visual que el orbe y la escena de biblioteca */
+.salas-tarjeta-puerta:hover .salas-tarjeta-puerta__hoja,
+.salas-tarjeta-puerta:focus-visible .salas-tarjeta-puerta__hoja {
+  transform: perspective(900px) rotateY(-8deg) translateY(-4px);
+  border-color: var(--laton, #C9A227);
+  box-shadow:
+    var(--sombra-grande),
+    0 0 24px rgb(201 162 39 / 35%),
+    inset 0 0 16px rgb(201 162 39 / 14%),
+    0 0 0 1.5px var(--laton, #C9A227);
+  background:
+    radial-gradient(circle at 50% 20%, rgb(201 162 39 / 18%), transparent 65%),
+    var(--superficie);
+}
+
+[data-tema="oscuro"] .salas-tarjeta-puerta__hoja {
+  background:
+    radial-gradient(circle at 50% 15%, rgb(201 162 39 / 8%), transparent 65%),
+    var(--superficie);
+}
+
+[data-tema="oscuro"] .salas-tarjeta-puerta:hover .salas-tarjeta-puerta__hoja,
+[data-tema="oscuro"] .salas-tarjeta-puerta:focus-visible .salas-tarjeta-puerta__hoja {
+  border-color: var(--foco, #E3B84E);
+  box-shadow:
+    0 18px 42px rgb(0 0 0 / 60%),
+    0 0 30px rgb(227 184 78 / 40%),
+    inset 0 0 20px rgb(201 162 39 / 22%),
+    0 0 0 1.5px var(--foco, #E3B84E);
+  background:
+    radial-gradient(circle at 50% 20%, rgb(201 162 39 / 22%), transparent 65%),
+    radial-gradient(circle at 50% 75%, rgb(31 77 58 / 20%), transparent 70%),
+    var(--superficie);
+}
+
+/* Estado activo / sala actual */
+.salas-tarjeta-puerta--activa .salas-tarjeta-puerta__hoja {
+  border-color: var(--color-sala, var(--color-sala-defecto));
+  box-shadow:
+    var(--sombra),
+    0 0 0 2px var(--color-sala, var(--color-sala-defecto)),
+    0 0 18px color-mix(in srgb, var(--color-sala, var(--color-sala-defecto)) 30%, transparent);
+  background:
+    radial-gradient(ellipse at 85% 15%, color-mix(in srgb, var(--color-sala, var(--color-sala-defecto)) 10%, transparent), transparent 60%),
+    var(--superficie);
+}
+
+/* 6. Polvo dorado sutil flotante (idéntico al login.css y escena.css) */
+.salas-polvo {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+  border-radius: inherit;
+}
+
+.salas-particula {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--laton, #C9A227);
+  box-shadow: 0 0 6px var(--laton, #C9A227);
+  opacity: 0.45;
+  animation: flotar-polvo-salas 6.5s infinite ease-in-out;
+}
+
+.salas-p1 {
+  left: 18%;
+  bottom: 22%;
+  animation-duration: 5.8s;
+  animation-delay: 0s;
+}
+
+.salas-p2 {
+  left: 56%;
+  bottom: 34%;
+  animation-duration: 7.2s;
+  animation-delay: 1.4s;
+  width: 4px;
+  height: 4px;
+}
+
+.salas-p3 {
+  left: 82%;
+  bottom: 18%;
+  animation-duration: 6.4s;
+  animation-delay: 2.8s;
+  width: 2.5px;
+  height: 2.5px;
+}
+
+@keyframes flotar-polvo-salas {
+  0% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.65;
+  }
+  75% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: translateY(-40px) translateX(8px);
+    opacity: 0;
+  }
+}
+
+/* Al pasar el mouse, las partículas doradas se intensifican suavemente */
+.salas-tarjeta-puerta:hover .salas-particula,
+.salas-tarjeta-puerta:focus-visible .salas-particula {
+  opacity: 0.85;
+  filter: brightness(1.25);
+}
+
+/* 7. Cabecera de la tarjeta: icono, nombre y bibliotecario */
+.salas-tarjeta-puerta__cabecera {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  position: relative;
+  z-index: 2;
+}
+
+.salas-tarjeta-puerta--compacta .salas-tarjeta-puerta__cabecera {
+  gap: 8px;
+}
+
+.salas-tarjeta-puerta__icono {
+  font-size: 2.1rem;
+  line-height: 1;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 4px rgb(0 0 0 / 12%));
+}
+
+.salas-tarjeta-puerta--compacta .salas-tarjeta-puerta__icono {
+  font-size: 1.6rem;
+}
+
+.salas-tarjeta-puerta__titulos {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.salas-tarjeta-puerta__nombre {
+  font-family: Fraunces, Georgia, serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--texto);
+  letter-spacing: -0.01em;
+}
+
+.salas-tarjeta-puerta--compacta .salas-tarjeta-puerta__nombre {
+  font-size: 0.98rem;
+  line-height: 1.25;
+}
+
+.salas-tarjeta-puerta__bibliotecario {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 0.83rem;
+  color: var(--texto-sec);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.salas-tarjeta-puerta--compacta .salas-tarjeta-puerta__bibliotecario {
+  font-size: 0.76rem;
+}
+
+.salas-tarjeta-puerta__bibliotecario strong {
+  color: var(--texto);
+  font-weight: 600;
+}
+
+.salas-tarjeta-puerta__atencion-icono {
+  font-size: 0.78rem;
+  opacity: 0.8;
+}
+
+.salas-tarjeta-puerta__distintivo {
+  align-self: flex-start;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--color-sala, var(--color-sala-defecto));
+  color: #FFFDF8;
+  white-space: nowrap;
+}
+
+/* 8. Descripción breve de la sala */
+.salas-tarjeta-puerta__desc {
+  position: relative;
+  z-index: 2;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 0.88rem;
+  line-height: 1.48;
+  color: var(--texto-sec);
+  margin: 0;
+  flex: 1;
+}
+
+/* 9. Mini-estante decorativo con lomos vivos que respiran suavemente */
+.salas-mini-estante {
+  position: relative;
+  z-index: 2;
+  margin-top: 4px;
+  padding-top: 6px;
+}
+
+.salas-mini-estante--compacto {
+  margin-top: 2px;
+  padding-top: 2px;
+}
+
+.salas-mini-estante__balda {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 7px;
+  height: 52px;
+  padding: 0 10px;
+  border-bottom: 4px solid var(--madera, #8B5E3C);
+  box-sizing: border-box;
+}
+
+.salas-mini-estante--compacto .salas-mini-estante__balda {
+  height: 38px;
+  gap: 5px;
+  padding: 0 6px;
+  border-bottom-width: 3px;
+}
+
+.salas-mini-estante__balda::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -6px;
+  height: 2px;
+  background: color-mix(in srgb, var(--laton) 55%, transparent);
+  border-radius: 1px;
+}
+
+/* Lomos de libro del mini-estante */
+.salas-mini-lomo {
+  position: relative;
+  display: inline-block;
+  border-radius: 3px 3px 0 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgb(0 0 0 / 42%) 0%,
+      rgb(255 255 255 / 22%) 18%,
+      rgb(0 0 0 / 5%) 80%,
+      rgb(0 0 0 / 45%) 100%
+    ),
+    var(--color-sala, var(--color-sala-defecto));
+  box-shadow: 1px 2px 5px rgb(0 0 0 / 22%);
+  box-sizing: border-box;
+  transform-origin: bottom center;
+  transition:
+    transform var(--dur, 220ms) var(--ease),
+    filter var(--dur, 220ms) var(--ease),
+    box-shadow var(--dur, 220ms) var(--ease);
+}
+
+/* Filete decorativo dorado de latón en cada lomo */
+.salas-mini-lomo::before {
+  content: "";
+  position: absolute;
+  top: 5px;
+  left: 15%;
+  right: 15%;
+  height: 2px;
+  background: var(--laton, #C9A227);
+  opacity: 0.88;
+  border-radius: 1px;
+}
+
+.salas-mini-lomo--1 { width: 14px; height: 38px; }
+.salas-mini-lomo--2 { width: 16px; height: 46px; }
+.salas-mini-lomo--3 { width: 13px; height: 34px; }
+.salas-mini-lomo--4 { width: 15px; height: 42px; }
+
+.salas-mini-estante--compacto .salas-mini-lomo--1 { width: 11px; height: 26px; }
+.salas-mini-estante--compacto .salas-mini-lomo--2 { width: 13px; height: 32px; }
+.salas-mini-estante--compacto .salas-mini-lomo--3 { width: 10px; height: 24px; }
+.salas-mini-estante--compacto .salas-mini-lomo--4 { width: 12px; height: 29px; }
+
+/* Micro-animación de respiración suave de los lomos (como en escena.css / login.css) */
+.salas-mini-lomo--respirando-1 {
+  animation: respirar-lomo-salas 5s ease-in-out infinite;
+}
+
+.salas-mini-lomo--respirando-2 {
+  animation: respirar-lomo-salas 6.2s ease-in-out infinite 1.4s;
+}
+
+.salas-mini-lomo--respirando-3 {
+  animation: respirar-lomo-salas 5.6s ease-in-out infinite 2.8s;
+}
+
+@keyframes respirar-lomo-salas {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* Al pasar el cursor o hacer foco, los lomos brillan con destello de latón */
+.salas-tarjeta-puerta:hover .salas-mini-lomo,
+.salas-tarjeta-puerta:focus-visible .salas-mini-lomo {
+  filter:
+    brightness(1.28)
+    drop-shadow(0 0 6px var(--laton, #C9A227))
+    drop-shadow(0 0 10px var(--color-sala, var(--color-sala-defecto)));
+  transform: translateY(-2px);
+}
+
+/* 10. Pie de la tarjeta: conteo real y botón de acción */
+.salas-tarjeta-puerta__pie {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--borde) 65%, transparent);
+}
+
+.salas-tarjeta-puerta--compacta .salas-tarjeta-puerta__pie {
+  padding-top: 6px;
+}
+
+.salas-tarjeta-puerta__conteo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--texto-sec);
+}
+
+.salas-tarjeta-puerta--compacta .salas-tarjeta-puerta__conteo {
+  font-size: 0.74rem;
+  gap: 4px;
+}
+
+.salas-tarjeta-puerta__conteo-icono {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.salas-tarjeta-puerta__accion {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--color-sala, var(--verde));
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: transform var(--dur-rapida, 150ms) var(--ease);
+}
+
+.salas-tarjeta-puerta--compacta .salas-tarjeta-puerta__accion {
+  font-size: 0.78rem;
+}
+
+.salas-tarjeta-puerta__flecha {
+  display: inline-block;
+  transition: transform var(--dur-rapida, 150ms) var(--ease);
+}
+
+.salas-tarjeta-puerta:hover .salas-tarjeta-puerta__flecha,
+.salas-tarjeta-puerta:focus-visible .salas-tarjeta-puerta__flecha {
+  transform: translateX(4px);
+}
+
+/* 11. Chip de sala para la cabecera del chat */
+.salas-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px 6px 4px 12px;
+  border-radius: 999px;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  box-shadow: 0 2px 8px rgb(83 55 31 / 6%);
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--texto);
+  box-sizing: border-box;
+  transition:
+    border-color var(--dur, 220ms) var(--ease),
+    box-shadow var(--dur, 220ms) var(--ease);
+}
+
+[data-tema="oscuro"] .salas-chip {
+  box-shadow: 0 4px 12px rgb(0 0 0 / 30%);
+}
+
+.salas-chip__indicador {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background-color: var(--color-sala, var(--color-sala-defecto));
+  box-shadow: 0 0 8px var(--color-sala, var(--color-sala-defecto));
+}
+
+.salas-chip__texto {
+  display: inline-block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
+}
+
+.salas-chip__boton-cambiar {
+  appearance: none;
+  border: 1px solid var(--borde);
+  background: color-mix(in srgb, var(--fondo) 85%, transparent);
+  color: var(--texto-sec);
+  border-radius: 999px;
+  padding: 3px 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform var(--dur-rapida, 150ms) var(--ease),
+    color var(--dur-rapida, 150ms) var(--ease),
+    border-color var(--dur-rapida, 150ms) var(--ease),
+    background-color var(--dur-rapida, 150ms) var(--ease);
+}
+
+.salas-chip__boton-cambiar:hover {
+  transform: translateY(-1px);
+  color: var(--texto);
+  border-color: var(--color-sala, var(--laton));
+  background: var(--verde-claro);
+}
+
+.salas-chip__boton-cambiar:focus-visible {
+  outline: 2px solid var(--foco, var(--laton));
+  outline-offset: 2px;
+}
+
+.salas-chip__boton-icono {
+  width: 12px;
+  height: 12px;
+}
+
+/* 12. Componentes auxiliares para el Paso 2 (Sugerencias y Transición) */
+
+/* Banner de sugerencia entre salas */
+.salas-sugerencia {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-top: 10px;
+  border-radius: var(--radio, 14px);
+  background: color-mix(in srgb, var(--laton) 12%, var(--superficie));
+  border: 1px solid color-mix(in srgb, var(--laton) 45%, transparent);
+  box-sizing: border-box;
+}
+
+.salas-sugerencia__texto {
+  font-size: 0.88rem;
+  color: var(--texto);
+  line-height: 1.45;
+  margin: 0;
+  flex: 1 1 240px;
+}
+
+.salas-sugerencia__boton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 6px 14px;
+  border-radius: var(--radio, 14px);
+  border: 1px solid var(--laton);
+  background: var(--laton);
+  color: #1F4D3A;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform var(--dur-rapida, 150ms) var(--ease),
+              box-shadow var(--dur-rapida, 150ms) var(--ease);
+}
+
+.salas-sugerencia__boton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgb(201 162 39 / 35%);
+}
+
+/* Transición tipo "caminar al estante" */
+.salas-transicion-estante {
+  animation: caminar-al-estante 320ms var(--ease) forwards;
+}
+
+@keyframes caminar-al-estante {
+  0% {
+    opacity: 0.35;
+    transform: translateX(18px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Estado de carga accesible con orbe latón latiendo */
+.salas-cargando {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 36px 16px;
+  grid-column: 1 / -1;
+  color: var(--texto-sec);
+  text-align: center;
+}
+
+.salas-cargando__orbe {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff4be 0%, #c9a227 75%, #784c1f 100%);
+  box-shadow: 0 0 14px rgb(201 162 39 / 65%);
+  animation: orbe-cargando-salas 1.4s infinite ease-in-out;
+}
+
+@keyframes orbe-cargando-salas {
+  0%, 100% {
+    transform: scale(0.9);
+    opacity: 0.65;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+}
+
+.salas-cargando__texto {
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+/* 13. Soporte estricto para prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .salas-tarjeta-puerta__hoja,
+  .salas-mini-lomo,
+  .salas-mini-lomo--respirando-1,
+  .salas-mini-lomo--respirando-2,
+  .salas-mini-lomo--respirando-3,
+  .salas-particula,
+  .salas-tarjeta-puerta__flecha,
+  .salas-chip__boton-cambiar,
+  .salas-sugerencia__boton,
+  .salas-cargando__orbe,
+  .salas-transicion-estante {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+    transform: none !important;
+  }
+
+  .salas-polvo {
+    display: none !important;
+  }
+
+  .salas-tarjeta-puerta:hover .salas-tarjeta-puerta__hoja,
+  .salas-tarjeta-puerta:focus-visible .salas-tarjeta-puerta__hoja {
+    transform: none !important;
+  }
+}
+
+/* 14. Adaptabilidad para pantallas móviles pequeñas (390px) */
+@media (max-width: 420px) {
+  .salas-selector {
+    padding-inline: 6px;
+  }
+
+  .salas-tarjeta-puerta__hoja {
+    padding: 14px 12px 12px;
+    min-height: auto;
+  }
+
+  .salas-tarjeta-puerta__nombre {
+    font-size: 1.02rem;
+  }
+
+  .salas-chip__texto {
+    max-width: 160px;
+  }
+}

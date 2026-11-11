@@ -10,7 +10,7 @@ from uuid import UUID
 
 import ollama
 
-from app import herramientas, auth
+from app import herramientas, auth, salas
 from app.numeros import extraer_codigo, extraer_pin, palabras_a_numero, pin_explicito
 from app.consultas import normalizar_consulta
 from app.config import (
@@ -20,6 +20,8 @@ from app.config import (
     LLM_MODEL_REDACCION,
     NUM_CTX,
     NUM_PREDICT,
+    NUM_PREDICT_TOOL_CALLING,
+    NUM_PREDICT_REDACCION,
     OLLAMA_HOST,
 )
 from app.db import conexion
@@ -40,6 +42,12 @@ _HERRAMIENTAS = {
     "consultar_prestamos_y_multas",
     "responder_con_documentos",
     "generar_bibliografia",
+    "presentacion",
+    "cortesia",
+    "panorama_catalogo",
+    "mas_prestados",
+    "ubicacion_material",
+    "recomendar",
 }
 
 TOOLS = [
@@ -165,6 +173,64 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "presentacion",
+            "description": "Presenta al agente de biblioteca y explica los servicios y salas disponibles.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "cortesia",
+            "description": "Responde con cortesía breve ante saludos, agradecimientos o despedidas.",
+            "parameters": {
+                "type": "object",
+                "properties": {"tipo": {"type": "string", "enum": ["gracias", "despedida"]}},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "panorama_catalogo",
+            "description": "Ofrece un panorama general del acervo con totales por sala y títulos destacados.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "mas_prestados",
+            "description": "Consulta los libros y materiales con mayor número de préstamos en el catálogo.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "ubicacion_material",
+            "description": "Indica el estante físico y disponibilidad de un libro o material en la biblioteca.",
+            "parameters": {
+                "type": "object",
+                "properties": {"titulo": {"type": "string"}},
+                "required": ["titulo"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "recomendar",
+            "description": "Recomienda libros o materiales del catálogo según afinidad temática o popularidad.",
+            "parameters": {
+                "type": "object",
+                "properties": {"tema": {"type": "string"}},
+            },
+        },
+    },
 ]
 
 
@@ -255,9 +321,158 @@ def _extraer_peticion_bibliografia(texto: str) -> dict[str, Any] | None:
     return {"tema": tema, "cantidad": cantidad, "norma": norma}
 
 
+def _es_pregunta_identidad(texto: str) -> bool:
+    """Detecta preguntas sobre la identidad y capacidades del agente."""
+    normal = _normalizar(texto).strip(" ¿?!¡.,:;")
+    patrones = (
+        r"\b(?:quien|que)\s+eres\b",
+        r"\bcomo\s+te\s+llamas\b",
+        r"\bcual\s+es\s+tu\s+nombre\b",
+        r"\bcon\s+quien\s+hablo\b",
+        r"\bque\s+(?:puedes|sabes)\s+hacer\b",
+        r"\ben\s+que\s+me\s+puedes\s+ayudar\b",
+        r"\bpara\s+que\s+sirves\b",
+        r"\bque\s+servicios\s+(?:prestas|ofreces|tienen)\b",
+        r"\bcuales\s+son\s+tus\s+funciones\b",
+        r"\bcomo\s+me\s+puedes\s+ayudar\b",
+        r"\bcomo\s+funcionas\b",
+        r"^que\s+haces$",
+    )
+    return any(re.search(patron, normal) for patron in patrones)
+
+
+def _es_cortesia(texto: str) -> tuple[bool, str]:
+    """Detecta agradecimientos y despedidas habituales."""
+    normal = _normalizar(texto).strip(" ¿?!¡.,:;")
+    if re.fullmatch(r"(?:muchas\s+|muchisimas\s+|mil\s+)?gracias(?:\s+a\s+ti|\s+por\s+todo|\s+amigo|\s+asistente)?", normal):
+        return True, "gracias"
+    if re.fullmatch(r"te\s+agradezco(?:\s+mucho)?", normal):
+        return True, "gracias"
+    if re.fullmatch(r"(?:adios|chao|hasta\s+luego|hasta\s+pronto|nos\s+vemos|hasta\s+la\s+proxima)(?:\s+gracias)?", normal):
+        return True, "despedida"
+    if re.fullmatch(r"(?:que\s+tengas|feliz)\s+(?:buen\s+dia|un\s+buen\s+dia|feliz\s+dia|tarde|noche)", normal):
+        return True, "despedida"
+    return False, ""
+
+
+def _es_panorama_catalogo(texto: str) -> bool:
+    """Detecta si se pide un panorama o visión general del catálogo."""
+    normal = _normalizar(texto).strip(" ¿?!¡.,:;")
+    patrones = (
+        r"^(?:que|cuales)\s+libros\s+(?:tienes?|hay|tienen)\b",
+        r"^(?:que|cual|cuales)\s+(?:material|materiales|acervo|titulos|obras)\s+(?:tienes?|hay|tienen)\b",
+        r"^que\s+tienes?\b",
+        r"^que\s+hay\s+en\s+la\s+biblioteca\b",
+        r"^(?:mostrar|ver|consultar|dame|muestra)\s+(?:el\s+)?catalogo\b",
+        r"^catalogo(?:\s+general)?$",
+        r"^que\s+puedo\s+leer\b",
+        r"^con\s+que\s+libros\s+cuentan\b",
+    )
+    return any(re.search(patron, normal) for patron in patrones)
+
+
+def _es_mas_prestados(texto: str) -> bool:
+    """Detecta si se pregunta por los libros más prestados o populares."""
+    normal = _normalizar(texto).strip(" ¿?!¡.,:;")
+    return bool(re.search(
+        r"\b(?:libro|libros|material|materiales|obra|obras)?\s*"
+        r"(?:mas\s+prestados?|mas\s+populares?|mas\s+pedidos?|mas\s+leidos?|mas\s+solicitados?)\b|"
+        r"\bcual(?:es)?\s+es\s+el\s+(?:libro\s+)?mas\s+prestado\b",
+        normal
+    ))
+
+
+def _extraer_peticion_ubicacion(texto: str) -> tuple[bool, str | None]:
+    """Detecta si se pregunta por el estante o ubicación de un material concreto."""
+    normal = _normalizar(texto).strip(" ¿?!¡.,:;")
+    match = re.search(
+        r"\b(?:donde\s+(?:encuentro|esta|ubico|queda|se\s+encuentra)|en\s+que\s+estante\s+esta)\s+(?:el\s+libro\s+|la\s+tesis\s+|el\s+material\s+|el\s+ejemplar\s+|el\s+|la\s+)?(.+)",
+        normal
+    )
+    if not match:
+        if re.search(r"\b(?:estante|ubicacion)\s+(?:de|del)\b", normal):
+            sub = re.search(r"\b(?:estante|ubicacion)\s+(?:de|del)\s+(.+)", texto, re.I)
+            if sub:
+                return True, _titulo_material(sub.group(1))
+        return False, None
+    comillas = re.search(r"[«“\"']([^»”\"']+)[»”\"']", texto)
+    if comillas and comillas.group(1).strip():
+        return True, comillas.group(1).strip().strip("¿?¡!.,:;")
+    titulo_candidato = _titulo_material(texto)
+    titulo_limpio = re.sub(
+        r"(?i)^(?:d[oó]nde\s+(?:encuentro|est[aá]|ubico|queda|se\s+encuentra)|en\s+qu[eé]\s+estante\s+est[aá]|cu[aá]l\s+es\s+la\s+ubicaci[oó]n\s+de)\s*",
+        "",
+        titulo_candidato
+    )
+    titulo_limpio = re.sub(r"(?i)^(?:el\s+libro\s+|la\s+tesis\s+|el\s+material\s+|el\s+|la\s+)", "", titulo_limpio).strip(" ¿?!¡.,:;")
+    return True, titulo_limpio
+
+
+def _extraer_peticion_recomendacion(texto: str) -> tuple[bool, str | None]:
+    """Detecta si se pide una recomendación, separando el tema si existe."""
+    normal = _normalizar(texto).strip(" ¿?!¡.,:;")
+    es_recomendacion = bool(re.search(
+        r"\b(?:recomi[eé]nda(?:me|r)?|sugi[eé]re(?:me|r)?|cual\s+es\s+el\s+mejor\b|que\s+libro\s+me\s+(?:sugieres|recomiendas))\b",
+        normal
+    ))
+    if not es_recomendacion:
+        return False, None
+    # Ver si hay un tema específico
+    tema_match = re.search(
+        r"\b(?:de|sobre|en|para)\s+([a-zA-ZáéíóúñÁÉÍÓÚÑ\s]{3,})$",
+        texto.strip(" ¿?!¡.,:;"),
+        re.I
+    )
+    if tema_match:
+        tema_candidato = tema_match.group(1).strip()
+        tema_norm = _normalizar(tema_candidato)
+        if tema_norm in ("leer", "estudiar", "la biblioteca", "el catalogo", "hoy", "manana", "un libro", "un buen libro", "los libros"):
+            return True, None
+        return True, tema_candidato
+    return True, None
+
+
 def intencion_por_palabras(texto: str) -> str:
-    """Elige una herramienta de respaldo según patrones deterministas."""
+    """Elige una herramienta según patrones deterministas con alta confianza."""
     normalizado = _normalizar(texto)
+
+    # Identidad y cortesía
+    if _es_pregunta_identidad(texto):
+        return "presentacion"
+    cortesia_val, _ = _es_cortesia(texto)
+    if cortesia_val:
+        return "cortesia"
+
+    # Panorama y popularidad en catálogo
+    if _es_panorama_catalogo(texto):
+        return "panorama_catalogo"
+    if _es_mas_prestados(texto):
+        return "mas_prestados"
+
+    # Ubicación y estantes
+    es_ubicacion, _ = _extraer_peticion_ubicacion(texto)
+    if es_ubicacion:
+        return "ubicacion_material"
+
+    # Recomendaciones (con o sin tema)
+    es_recom, _ = _extraer_peticion_recomendacion(texto)
+    if es_recom:
+        return "recomendar"
+
+    # Préstamos y cuenta del usuario: "¿Qué libros tengo prestados?", "mis préstamos"
+    if re.search(
+        r"\b(?:que\s+libros?\s+tengo\s+prestados?|que\s+tengo\s+prestado|libros?\s+que\s+tengo\s+prestados?|cuales\s+son\s+mis\s+prestamos|mis\s+prestamos|mis\s+libros\s+prestados)\b",
+        normalizado,
+    ):
+        return "consultar_prestamos_y_multas"
+
+    # Reglamento: "¿Cuántos libros puedo sacar a la vez?"
+    if re.search(
+        r"\b(?:cuantos?|cuantas?)\s+(?:libros?|ejemplares|materiales|tesis)?\s*(?:puedo|se\s+pueden?)\s*(?:sacar|prestar|pedir|llevar|tener)\b",
+        normalizado,
+    ):
+        return "responder_con_documentos"
+
     if re.search(r"\b(como|donde)\b.*\b(pag(?:o|ar|a)|pagar)\b.*\bmultas?\b", normalizado):
         return "responder_con_documentos"
     if re.fullmatch(r"(?:(?:quiero|puedo)\s+(?:ver|consultar)\s+)?mis reservas[ .!?¿¡]*", normalizado):
@@ -293,7 +508,11 @@ def intencion_por_palabras(texto: str) -> str:
         return "resumir_material"
     if "reserv" in normalizado:
         return "reservar"
-    if "renovaciones" in normalizado or "multa por" in normalizado:
+    if (
+        "renovaciones" in normalizado
+        or "multa por" in normalizado
+        or re.search(r"\b(?:cuanto\s+(?:es|cuesta|vale|se\s+paga|cobran)|cual\s+es|valor|tarifa|costo)\b.*\bmulta", normalizado)
+    ):
         return "responder_con_documentos"
     if "renov" in normalizado or re.search(r"\brenueva\b", normalizado):
         return "renovar_prestamo"
@@ -318,17 +537,28 @@ def intencion_por_palabras(texto: str) -> str:
         return "consultar_disponibilidad"
     if "tienen el libro" in normalizado or "tienen el titulo" in normalizado:
         return "buscar_exacto"
+    if re.search(r"\b(?:mu[eé]strame\s+m[aá]s|ver\s+m[aá]s|m[aá]s\s+informaci[oó]n|ficha\s+de|detalle\s+de)\b", normalizado):
+        return "buscar_exacto"
     if re.search(r"[\"“”«][^\"“”»]+[\"“”»]", texto) or re.search(r"\bautor\b", normalizado):
         return "buscar_exacto"
+    temas_no_autores = (
+        r"\b(?:contabilidad|contaminacion|marketing|redes|programacion|ecologia|cultivo|costos|finanzas|"
+        r"sistemas|ia|inteligencia|calculo|algebra|quimica|fisica|biologia|administracion|negocios|"
+        r"derecho|economia|investigacion|metodologia|ambiental|ambientales|medio\s+ambiente)\b"
+    )
     if re.search(
         r"\b(libro|libros|titulo|obra|material|buscar|busco|tienen)\b.*"
         r"\bde\s+[A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ]+",
         texto,
-    ):
+    ) and not re.search(temas_no_autores, normalizado):
         return "buscar_exacto"
     if any(
         palabra in normalizado
-        for palabra in ("libro", "libros", "tesis", "articulo", "sobre", "tema", "recomi", "bibliografia", "busco", "red", "cultivo", "contabilidad")
+        for palabra in (
+            "libro", "libros", "tesis", "articulo", "sobre", "tema", "recomi",
+            "bibliografia", "busco", "red", "cultivo", "contabilidad",
+            "contaminacion", "ambiental", "ambiente",
+        )
     ):
         return "buscar_semantico"
     if re.search(r"\b(prestamo|prestamos)\b", normalizado):
@@ -524,6 +754,7 @@ def _cargar_conversacion(
             "accion_pendiente": None,
             "esperando": None,
             "accion_tras_codigo": None,
+            "sala": None,
         }
         cursor.execute(
             """
@@ -626,7 +857,7 @@ def _mensaje_historial(conversacion_id: str) -> list[dict[str, str]]:
             SELECT rol, contenido FROM public.mensajes
             WHERE conversacion_id = %s AND rol IN ('user', 'assistant')
             ORDER BY creado DESC, id DESC
-            LIMIT 6
+            LIMIT 4
             """,
             (conversacion_id,),
         )
@@ -676,18 +907,205 @@ def _llamar_modelo(
     ) from ultimo_error
 
 
-def _prompt_sistema() -> str:
-    hoy = datetime.now().date().isoformat()
+_MAPA_AREAS: list[tuple[str, list[str]]] = [
+    (
+        "ingenieria",
+        [
+            "ingenieria y tecnologia", "ingenieria", "sistemas", "tecnologia",
+            "programacion", "inteligencia artificial", "ia", "software",
+            "computacion", "redes",
+        ],
+    ),
+    (
+        "agro-ambiental",
+        [
+            "ciencias agrarias y ambientales", "ciencias agrarias", "agro-ambiental",
+            "agroambiental", "agro forestal", "agroforestal", "ambiental",
+            "agraria", "agrarias", "agro", "cultivos", "ecologia", "suelos",
+            "bosques",
+        ],
+    ),
+    (
+        "administracion",
+        [
+            "administracion y negocios", "administracion de empresas",
+            "administracion", "negocios", "marketing", "empresas", "gestion",
+        ],
+    ),
+    (
+        "contaduria",
+        [
+            "contaduria y finanzas", "contaduria publica", "contaduria",
+            "contabilidad", "finanzas", "costos", "tributaria",
+        ],
+    ),
+    (
+        "investigacion",
+        [
+            "investigacion y escritura", "investigacion", "metodologia",
+            "escritura", "redaccion", "metodologia de la investigacion",
+            "tesis de grado",
+        ],
+    ),
+]
+
+
+def _detectar_area_sala(texto: str) -> str | None:
+    """Identifica el slug de sala correspondiente a palabras clave o sinónimos en el texto."""
+    normal = _normalizar(texto).strip(" ¿?!¡.,:;")
+    for slug, palabras in _MAPA_AREAS:
+        for palabra in palabras:
+            if re.search(rf"\b{re.escape(palabra)}\b", normal):
+                return slug
+    return None
+
+
+def _es_consulta_salas(texto: str) -> bool:
+    """Verifica si el usuario pregunta qué salas hay o pide cambiar de sala sin indicar cuál."""
+    normal = _normalizar(texto).strip(" ¿?!¡.,:;")
+    if re.search(r"\b(?:que|cuales)\s+(?:son\s+las\s+|hay\s+de\s+|tienen\s+de\s+)?salas\b", normal):
+        return True
+    if re.search(r"\b(?:cambia(?:me|r)?|cambio)\s+(?:de\s+)?sala\b", normal):
+        return True
+    if re.search(r"\b(?:ver|mostrar|listar|cuales)\s+salas\b", normal):
+        return True
+    if normal in ("salas", "que salas hay", "cuales salas hay", "cambiame de sala", "cambiar de sala"):
+        return True
+    return False
+
+
+def _es_quitar_sala(texto: str) -> bool:
+    """Detecta si el usuario desea volver a toda la biblioteca."""
+    normal = _normalizar(texto).strip(" ¿?!¡.,:;")
+    if re.search(r"\b(?:toda\s+la\s+biblioteca|toda\s+biblioteca|todas\s+las\s+salas|sin\s+sala|salir\s+de\s+la\s+sala|quitar\s+sala)\b", normal):
+        return True
+    if normal in ("toda la biblioteca", "toda biblioteca", "todas", "general", "sin sala"):
+        return True
+    return False
+
+
+_VERBOS_TRAMITE_CONSULTA = re.compile(
+    r"\b("
+    r"reserv\w*|aparta\w*|renov\w*|cancel\w*|prest\w*|devolv\w*|devolver\w*|disponib\w*|"
+    r"ubic\w*|donde\b|estante\w*|cit\w*|referenc\w*|resum\w*|"
+    r"recomiend\w*|recomendar\w*|sugier\w*|sugerir\w*|mejor\w*|trata\w*|"
+    r"muestr\w*|busc\w*|ejemplar\w*|material\w*|libros?\b|tesis\b|"
+    r"titul\w*|autor\w*|articulo\w*|acervo\b|cuanto\w*|dias\b|"
+    r"multa\w*|sancion\w*|reglamento\w*|horario\w*"
+    r")\b",
+    re.IGNORECASE,
+)
+
+_PALABRAS_RELLENO_SALA = {
+    "la", "el", "las", "los", "un", "una",
+    "sala", "salas", "area", "areas", "seccion",
+    "de", "del", "a", "al", "en",
+    "quiero", "quisiera", "deseo", "me", "gustaria", "yo",
+    "ir", "entrar", "pasar", "pasame", "llevame", "vamos",
+    "cambia", "cambiar", "cambiame",
+    "por", "favor", "porfa",
+}
+
+
+def _es_titulo_material_existente(texto: str) -> bool:
+    """Verifica si el texto coincide con el título de un material del catálogo."""
+    limpio = _normalizar(texto).strip(" ¿?!¡.,:;\"'“”«»")
+    if not limpio or len(limpio) < 4:
+        return False
+    # No confundir nombres cortos de áreas temáticas con títulos de material
+    areas_puras = {
+        "ingenieria", "sistemas", "tecnologia", "agro-ambiental", "agroambiental",
+        "agraria", "agrarias", "agro", "administracion", "negocios", "contaduria",
+        "finanzas", "costos", "investigacion", "escritura",
+    }
+    if limpio in areas_puras:
+        return False
+
+    try:
+        with conexion() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT 1 FROM public.material
+                WHERE lower(unaccent(titulo)) = lower(unaccent(%s))
+                LIMIT 1
+                """,
+                (limpio,),
+            )
+            if cursor.fetchone():
+                return True
+            palabras = limpio.split()
+            if len(palabras) >= 2:
+                cursor.execute(
+                    """
+                    SELECT 1 FROM public.material
+                    WHERE lower(unaccent(titulo)) ILIKE lower(unaccent(%s))
+                    LIMIT 1
+                    """,
+                    (f"%{limpio}%",),
+                )
+                if cursor.fetchone():
+                    return True
+    except Exception:
+        pass
+    return False
+
+
+def _es_intencion_elegir_sala(texto: str) -> str | None:
+    """Devuelve el slug de sala si la intención es elegir una sala específica, o None."""
+    # 1. Título entre comillas: nunca es cambio de sala
+    if re.search(r"[«»\"'“”]", texto):
+        return None
+
+    normal = _normalizar(texto).strip(" ¿?!¡.,:;")
+    if not normal:
+        return None
+
+    if _es_quitar_sala(texto) or _es_consulta_salas(texto):
+        return None
+
+    # 1b. Verbos o acciones de trámite o consulta: nunca es cambio de sala
+    if _VERBOS_TRAMITE_CONSULTA.search(normal):
+        return None
+
+    # 1c. Coincide con título de material existente: nunca es cambio de sala
+    if _es_titulo_material_existente(texto):
+        return None
+
+    es_comando_sala = bool(re.search(
+        r"^(?:(?:por\s+favor\s+)?(?:yo\s+)?(?:quiero|quisiera|me\s+gustaria|deseo)\s+)?"
+        r"(?:ir\s+a\s+|entrar\s+a\s+|llevame\s+a\s+|vamos\s+a\s+|pasame\s+a\s+|cambia(?:r|me)?\s+a\s+)?"
+        r"(?:la\s+)?(?:sala\s+de\s+|sala\s+|la\s+de\s+)",
+        normal,
+    ))
+
+    # 2. Extraer palabras no relleno
+    tokens = [t for t in normal.split() if t not in _PALABRAS_RELLENO_SALA]
+    reducido = " ".join(tokens)
+    if not reducido:
+        return None
+
+    # Para caso corto (<= 6 palabras) o comando de sala:
+    # verificar que lo que queda reducido coincida estrictamente con un área del mapa
+    for slug, palabras in _MAPA_AREAS:
+        for palabra in palabras:
+            palabra_norm = _normalizar(palabra)
+            if reducido == palabra_norm:
+                return slug
+
+    # Si hay comando explícito de sala ("quiero ir a la sala de ...") permitir detección de área
+    if es_comando_sala:
+        slug = _detectar_area_sala(reducido)
+        if slug:
+            return slug
+
+    return None
+
+
+def _prompt_sistema(sala_info: dict[str, Any] | None = None) -> str:
+    sala_txt = f" Sala actual: {sala_info['nombre']}." if sala_info else ""
     return (
-        "Eres el asistente de la biblioteca de UniPutumayo. Responde en español, "
-        "con cordialidad y brevedad, y no inventes datos: usa únicamente la "
-        "información recuperada por las herramientas. Elige UNA herramienta "
-        "cuando la petición corresponda a la biblioteca. No solicites códigos "
-        "ni PIN en el chat; los trámites requieren una sesión autenticada. "
-        "No afirmes que una reserva o renovación ya se realizó; la aplicación "
-        "solicita y valida la confirmación explícita. "
-        "Nunca reveles información de otros usuarios ni solicites ni incluyas "
-        f"identificadores internos. Hoy es {hoy}."
+        f"Asistente de la biblioteca UniPutumayo.{sala_txt} Elige UNA herramienta para la consulta. "
+        "No inventes datos ni pidas PIN o códigos en chat. Sé breve y cordial en español."
     )
 
 
@@ -767,7 +1185,9 @@ def _titulo_material(texto: str) -> str:
     titulo = re.sub(r"(?i)^\s*(?:hola|por favor|porfa)[\s,]*", "", titulo)
     titulo = re.sub(
         r"(?i)^\s*(?:quiero|quisiera|me gustaria|me gustaría|busco|buscar|buscame|búscame|"
-        r"tienen|hay|consultar|ver|dime|indiqueme|indíqueme|necesito|podrias|podrías)?\s*"
+        r"tienen|hay|consultar|ver|dime|indiqueme|indíqueme|necesito|podrias|podrías|"
+        r"mu[eé]strame\s+m[aá]s\s+(?:de\s+)?|ver\s+m[aá]s\s+(?:de\s+)?|m[aá]s\s+informaci[oó]n\s+(?:de\s+)?|"
+        r"ficha\s+(?:de|del)?\s*|detalle\s+(?:de|del)?\s*)?\s*"
         r"(?:res[eé]rv(?:ame|amelo|ármelo|armelo|ar|a)|disponibilidad|disponible|"
         r"buscar|consultar)?\s*"
         r"(?:de|el|la|los|las|un|una)?\s*"
@@ -776,11 +1196,17 @@ def _titulo_material(texto: str) -> str:
         titulo,
     )
     titulo = re.sub(r"(?i)^de\s+", "", titulo)
+    comillas = re.search(r"[«“\"']([^»”\"']+)[»”\"']", titulo)
+    if comillas and comillas.group(1).strip():
+        return comillas.group(1).strip().strip("¿?¡!.,:;")
     return titulo.strip().strip("¿?¡!.,:;\"'“”«»")
 
 
 def _titulo_resumen_material(texto: str) -> str:
     """Extrae el título de preguntas directas sobre el contenido de una tesis."""
+    comillas = re.search(r"[«“\"']([^»”\"']+)[»”\"']", texto)
+    if comillas and comillas.group(1).strip():
+        return comillas.group(1).strip().strip("¿?¡!.,:;")
     titulo = texto.strip().strip("¿?¡!.,:;\"'“”«»")
     titulo = re.sub(
         r"(?i)^\s*(?:de qué trata|de que trata|resúmeme|resumeme|resume|"
@@ -806,33 +1232,125 @@ def _es_error_tecnico(resultado: dict[str, Any] | None) -> str | None:
     return None
 
 
-def _plantilla_busqueda(materiales: list[dict[str, Any]]) -> str:
+def _plantilla_busqueda(
+    materiales: list[dict[str, Any]], sala_info: dict[str, Any] | None = None
+) -> str:
     if not materiales:
+        if sala_info:
+            return f"En la {sala_info['nombre']} no encontré material sobre eso en el acervo."
         return "No encontré material sobre eso en el acervo."
+    prefijo = f"En la {sala_info['nombre']} encontré:\n" if sala_info else ""
     lineas = []
     for material in materiales[:5]:
-        disponibilidad = (
-            f"{material.get('disponibles', 0)} de {material.get('total', 0)} disponibles"
-            if int(material.get("disponibles") or 0) > 0
-            else "sin ejemplares disponibles"
-        )
+        disp = int(material.get("disponibles") or 0)
+        tot = int(material.get("total") or 0)
+        if disp > 0:
+            texto_disp = "disponible" if disp == 1 and tot == 1 else "disponibles"
+            disponibilidad = f"{disp} de {tot} {texto_disp}"
+        else:
+            disponibilidad = "sin ejemplares disponibles"
         linea = f"«{material.get('titulo', 'Sin título')}», de {material.get('autor', 'autor no registrado')} ({material.get('tipo', 'material')}); {disponibilidad}."
         lineas.append(linea)
+    return prefijo + "\n".join(lineas)
+
+
+def _formato_ficha_material(material: dict[str, Any]) -> str:
+    """Genera la ficha completa de un material con autor, año, tipo, programa, sala, disponibilidad, estante/PDF y opciones."""
+    titulo = material.get("titulo", "Sin título")
+    autor = material.get("autor", "Autor no registrado")
+    anio = material.get("anio") or "No registrado"
+    tipo = str(material.get("tipo") or "Material").capitalize()
+    prog = material.get("programa") or "General"
+    sala = material.get("sala_nombre") or "Colección general"
+    disp = int(material.get("disponibles") or 0)
+    tot = int(material.get("total") or 0)
+    disp_txt = f"{disp} de {tot} disponibles" if disp > 0 else "sin ejemplares disponibles"
+
+    estantes = material.get("estantes") or []
+    if estantes:
+        estante_txt = f"Estante {', '.join(estantes)}"
+    elif str(material.get("tipo", "")).lower() == "tesis":
+        estante_txt = "Colección de tesis / Formato digital (PDF) para consulta en sala"
+    else:
+        estante_txt = "Colección general"
+
+    lineas = [
+        f"Ficha del material «{titulo}»:",
+        f"• Autor: {autor}",
+        f"• Año: {anio}",
+        f"• Tipo: {tipo}",
+        f"• Programa: {prog}",
+        f"• Sala: {sala}",
+        f"• Disponibilidad: {disp_txt}",
+        f"• Ubicación: {estante_txt}",
+        f"\nOpciones: Puedes pedirme reservarlo («Quiero reservar este material»), resumir su contenido («De qué trata») o consultar su disponibilidad.",
+    ]
     return "\n".join(lineas)
 
 
-def _plantilla_bibliografia(resultado: dict[str, Any]) -> str:
+def _limpiar_texto_resumen_extractivo(texto_crudo: str) -> str:
+    """Limpia el texto de un resumen de tesis o reseña de libro:
+    - Quita encabezados markdown y encabezados sueltos al inicio sin punto.
+    - Une palabras partidas por el corte de línea/PDF ('clari dad' -> 'claridad')
+      solo si la unión forma una palabra que aparece en el resto del texto.
+    """
+    texto = _limpiar_respuesta(texto_crudo)
+    texto = re.sub(r"^#+\s+[^\n]+\n*", "", texto).strip()
+
+    lineas = texto.splitlines()
+    while lineas:
+        primera = lineas[0].strip()
+        if not primera:
+            lineas.pop(0)
+            continue
+        if not primera.endswith((".", "!", "?", ":")) and len(primera.split()) <= 15:
+            lineas.pop(0)
+        else:
+            break
+    texto = "\n".join(lineas).strip()
+
+    texto = re.sub(r"(\b[a-zA-ZáéíóúñÁÉÍÓÚÑ]+)-\s*\n\s*([a-zA-ZáéíóúñÁÉÍÓÚÑ]+\b)", r"\1\2", texto)
+
+    texto_normalizado = _normalizar(texto)
+
+    def _reemplazar_partida(match: re.Match) -> str:
+        p1 = match.group(1)
+        p2 = match.group(2)
+        unida = p1 + p2
+        unida_norm = _normalizar(unida)
+        patron_palabra = rf"\b{re.escape(unida_norm)}\b"
+        if len(re.findall(patron_palabra, texto_normalizado)) >= 1:
+            return unida
+        return match.group(0)
+
+    texto = re.sub(
+        r"\b([a-zA-ZáéíóúñÁÉÍÓÚÑ]{2,})\s+([a-zA-ZáéíóúñÁÉÍÓÚÑ]{2,})\b",
+        _reemplazar_partida,
+        texto,
+    )
+
+    return texto.strip()
+
+
+def _plantilla_bibliografia(
+    resultado: dict[str, Any], sala_info: dict[str, Any] | None = None
+) -> str:
     datos = resultado.get("datos") or {}
     referencias = datos.get("referencias") or []
     if not referencias:
+        if sala_info:
+            return f"En la {sala_info['nombre']} no encontré material del acervo sobre ese tema para armar la bibliografía."
         return "No encontré material del acervo sobre ese tema para armar la bibliografía."
     norma = datos.get("norma", "APA")
     tema = datos.get("tema", "")
     orden = "ordenadas alfabéticamente"
     if norma == "IEEE":
         orden += "; en un documento real IEEE numera por orden de aparición"
+    prefijo = f"En la {sala_info['nombre']} encontré" if sala_info else "Encontré"
+    cant_ref = len(referencias)
+    texto_ref = "1 referencia" if cant_ref == 1 else f"{cant_ref} referencias"
     lineas = [
-        f"Encontré {len(referencias)} referencias en formato {norma} sobre «{tema}» ({orden}):"
+        f"{prefijo} {texto_ref} en formato {norma} sobre «{tema}» ({orden}):"
     ]
     lineas.extend(
         f"{indice}. {referencia['texto']}"
@@ -883,6 +1401,8 @@ def _plantilla_cuenta(datos: dict[str, Any]) -> str:
 
 
 def _fuentes_de_resultado(nombre: str, resultado: dict[str, Any]) -> list[dict[str, Any]]:
+    if nombre in ("presentacion", "cortesia"):
+        return []
     if nombre == "resumir_material":
         return [
             {
@@ -981,6 +1501,106 @@ def _renderizar_documentos(
         fragmentos, key=lambda item: float(item.get("similitud", 0)), reverse=True
     )[:3]
 
+    normal_p = _normalizar(pregunta)
+
+    # Punto 1: Plazo de préstamo ("¿Cuántos días me prestan un libro?", "¿Cuánto dura un préstamo?"):
+    es_pregunta_dias_prestamo = bool(re.search(
+        r"\b(?:cuantos?\s+dias|cuanto\s+tiempo|duracion|plazo|periodo|tiempo)\s+(?:me\s+)?(?:prestan?|dura|es\s+el\s+prestamo)\b|"
+        r"\b(?:prestan?|prestamo)\s+(?:por\s+)?(?:cuantos?\s+dias|cuanto\s+tiempo|que\s+plazo)\b|"
+        r"\bcuantos?\s+dias\s+me\s+prestan\b",
+        normal_p,
+    ))
+    if es_pregunta_dias_prestamo and not re.search(r"\brenov\w*", normal_p):
+        faq_duracion = next(
+            (f for f in fragmentos if "cuanto dura un prestamo" in _normalizar(str(f.get("seccion") or "")) or "8 dias calendario" in _normalizar(str(f.get("texto") or ""))),
+            None,
+        )
+        doc_nombre = (faq_duracion.get("documento") if faq_duracion else None) or "Preguntas frecuentes de la biblioteca"
+        seccion_nombre = (faq_duracion.get("seccion") if faq_duracion else None) or "¿Cuánto dura un préstamo externo?"
+        texto_plazo = "Los libros se prestan por 8 días calendario (el periodo ordinario de préstamo externo es de 8 días calendario). La fecha exacta que aparece en el sistema es la que debe tener en cuenta."
+        return f"{texto_plazo} Fuente: {doc_nombre} › {seccion_nombre}.", 0.0, None
+
+    # Pregunta sobre valor o tarifa de la multa por día / retraso ("¿Cuánto es la multa por día?"):
+    es_pregunta_multa_dia = bool(re.search(
+        r"\b(?:cuanto\s+(?:es|cuesta|vale|se\s+paga|se\s+cobra|cobran)|cual\s+es|valor|tarifa|costo)\b.*\bmulta\b|"
+        r"\bmulta\b.*\b(?:por\s+dia|diaria|cuanto|valor|tarifa|costo|retraso|mora)\b",
+        normal_p,
+    ))
+    if es_pregunta_multa_dia:
+        frag_multa = next(
+            (
+                f for f in fragmentos
+                if "1.000" in str(f.get("texto") or "") or "1000" in str(f.get("texto") or "") or "multa" in str(f.get("seccion") or "").lower()
+            ),
+            None,
+        )
+        doc_nombre = (frag_multa.get("documento") if frag_multa else None) or "Reglamento de préstamos"
+        seccion_nombre = (frag_multa.get("seccion") if frag_multa else None) or "Multas"
+        texto_multa = (
+            "La devolución posterior a la fecha de vencimiento genera una multa de "
+            "$1.000 por día calendario de retraso y por cada ejemplar, de acuerdo con el registro del sistema."
+        )
+        return f"{texto_multa} Fuente: {doc_nombre} › {seccion_nombre}.", 0.0, None
+
+    # Pregunta específica del reglamento sobre límite de libros simultáneos:
+    if re.search(r"\b(?:cuantos?|cuantas?)\s+(?:libros?|ejemplares|materiales)?\s*(?:puedo|se\s+pueden?)\s*(?:sacar|prestar|pedir|llevar|tener)\b", normal_p):
+        doc_reglamento = next((f for f in seleccion if "reglamento" in str(f.get("documento", "")).lower()), seleccion[0] if seleccion else None)
+        doc_nombre = (doc_reglamento.get("documento") if doc_reglamento else None) or "Reglamento de préstamos"
+        seccion_nombre = (doc_reglamento.get("seccion") if doc_reglamento else None) or "Condiciones de préstamo"
+        texto_extractivo = (
+            "El reglamento indexado indica que la cantidad de ejemplares y la duración permitida "
+            "dependen del perfil del usuario y del tipo de recurso, pero no fija un límite numérico exacto de libros simultáneos."
+        )
+        return f"{texto_extractivo} Fuente: {doc_nombre} › {seccion_nombre}.", 0.0, None
+
+    # Reordenar fragmentos de FAQ: prioriza la pregunta de la FAQ más parecida a la del usuario (sección),
+    # y descarta FAQ cuyo tema principal sea otro (renovar != prestar)
+    faq_frags = [
+        f for f in fragmentos
+        if str(f.get("tipo", "")).lower() == "faq" or "preguntas frecuentes" in str(f.get("documento", "")).lower()
+    ]
+    if faq_frags:
+        def _score_faq(f: dict[str, Any]) -> float:
+            score = float(f.get("similitud", 0))
+            sec = _normalizar(str(f.get("seccion") or ""))
+            if re.search(r"\brenov\w*", sec) and not re.search(r"\brenov\w*", normal_p):
+                score -= 0.50
+            if re.search(r"\brenov\w*", normal_p) and not re.search(r"\brenov\w*", sec):
+                score -= 0.30
+            palabras_u = set(re.findall(r"\b[a-zA-ZáéíóúñÁÉÍÓÚÑ]{4,}\b", normal_p))
+            palabras_s = set(re.findall(r"\b[a-zA-ZáéíóúñÁÉÍÓÚÑ]{4,}\b", sec))
+            score += len(palabras_u.intersection(palabras_s)) * 0.15
+            return score
+
+        faq_frags.sort(key=_score_faq, reverse=True)
+        if faq_frags and _score_faq(faq_frags[0]) > float(seleccion[0].get("similitud", 0)):
+            seleccion[0] = faq_frags[0]
+
+    # Punto 3: Reglamento / FAQ rápido:
+    # Si el mejor fragmento es de Preguntas frecuentes o Reglamento con similitud >= 0.55,
+    # responder EXTRACTIVO (la respuesta de la FAQ o las 1-3 frases del fragmento, limpias) + "Fuente: ...", sin LLM.
+    mejor_frag = seleccion[0]
+    sim_mejor = float(mejor_frag.get("similitud", 0))
+    doc_mejor = str(mejor_frag.get("documento", "")).lower()
+    tipo_mejor = str(mejor_frag.get("tipo", "")).lower()
+    es_faq_o_reglamento = (
+        tipo_mejor in ("faq", "reglamento")
+        or "preguntas frecuentes" in doc_mejor
+        or "reglamento" in doc_mejor
+    )
+    if es_faq_o_reglamento and sim_mejor >= 0.55:
+        texto_crudo = str(mejor_frag.get("texto") or "").strip()
+        texto_limpio = _limpiar_respuesta(texto_crudo)
+        texto_limpio = re.sub(r"^#+\s+[^\n]+\n*", "", texto_limpio).strip()
+
+        frases = [f.strip() for f in re.split(r"(?<=[.!?])\s+", texto_limpio) if f.strip()]
+        texto_extractivo = " ".join(frases[:3]).strip()
+        if not texto_extractivo:
+            texto_extractivo = texto_limpio
+
+        cita = f"Fuente: {mejor_frag.get('documento')} › {mejor_frag.get('seccion') or 'General'}."
+        return f"{texto_extractivo} {cita}".strip(), 0.0, None
+
     # Citación (APA/IEEE): respuesta EXTRACTIVA. El modelo de 3B tiende a deformar los
     # formatos, así que si un fragmento trae "Formato: ..." se copia literal con su ejemplo.
     if re.search(r"\b(apa|ieee|cit[ao]|citar|referencia)", _normalizar(pregunta)):
@@ -1023,7 +1643,7 @@ def _renderizar_documentos(
     ]
     try:
         respuesta, tiempo = _llamar_modelo(
-            mensajes, con_herramientas=False, num_predict=NUM_PREDICT
+            mensajes, con_herramientas=False, num_predict=NUM_PREDICT_REDACCION
         )
         contenido = _extraer(_extraer(respuesta, "message", {}), "content", "")
         texto = _limpiar_respuesta(str(contenido or ""))
@@ -1061,8 +1681,62 @@ def _ejecutar_herramienta(
     argumentos: dict[str, Any],
     usuario_id: int | None,
     estado: dict[str, Any],
+    sala_slug: str | None = None,
 ) -> tuple[str, dict[str, Any] | None, list[dict[str, Any]], str | None, float]:
     """Resuelve argumentos de lenguaje natural y ejecuta o prepara una acción."""
+    sala_info = salas.sala_por_slug(sala_slug)
+    if nombre == "presentacion":
+        if sala_info:
+            bibliotecario = sala_info.get("bibliotecario", {}).get("nombre", "el bibliotecario")
+            nombre_sala = sala_info.get("nombre", "la sala")
+            respuesta = (
+                f"Soy el agente virtual de la biblioteca de la Institución Universitaria del Putumayo, "
+                f"y te atiendo desde la {nombre_sala} junto a {bibliotecario}. "
+                "Puedo ayudarte a buscar libros y tesis, revisar estantes y disponibilidad, "
+                "gestionar préstamos y reservas, y orientarte sobre el reglamento institucional "
+                "y las normas de citación (APA e IEEE). ¿En qué te colaboro hoy?"
+            )
+        else:
+            respuesta = (
+                "Soy el agente de la biblioteca de la Institución Universitaria del Putumayo. "
+                "Puedo ayudarte a explorar nuestro catálogo de libros y tesis, conocer la disponibilidad "
+                "y ubicación en estantes, gestionar tus préstamos o reservas, y resolver dudas sobre "
+                "el reglamento y normas de citación (APA e IEEE). Contamos con 5 salas temáticas: "
+                "Ingeniería y Tecnología, Ciencias Agrarias y Ambientales, Administración y Negocios, "
+                "Contaduría y Finanzas, e Investigación y Escritura. ¿Qué deseas consultar?"
+            )
+        resultado = {"ok": True, "mensaje": respuesta, "datos": None}
+        return respuesta, resultado, [], None, 0
+
+    if nombre == "cortesia":
+        tipo = argumentos.get("tipo", "gracias")
+        if tipo == "despedida":
+            respuesta = "¡Hasta luego! Que tengas un excelente día. La biblioteca está a tu disposición cuando lo necesites."
+        else:
+            respuesta = "¡Con mucho gusto! Estoy a tu orden para cualquier otra consulta sobre el acervo o los servicios de la biblioteca."
+        resultado = {"ok": True, "mensaje": respuesta, "datos": None}
+        return respuesta, resultado, [], None, 0
+
+    if nombre == "panorama_catalogo":
+        resultado = herramientas.panorama_catalogo(sala_slug=sala_slug)
+        return resultado["mensaje"], resultado, [], _es_error_tecnico(resultado), 0
+
+    if nombre == "mas_prestados":
+        resultado = herramientas.mas_prestados(sala_slug=sala_slug)
+        return resultado["mensaje"], resultado, [], _es_error_tecnico(resultado), 0
+
+    if nombre == "ubicacion_material":
+        titulo = str(argumentos.get("titulo") or "").strip()
+        resultado = herramientas.ubicacion_material(titulo, sala_slug=sala_slug)
+        return resultado["mensaje"], resultado, [], _es_error_tecnico(resultado), 0
+
+    if nombre == "recomendar":
+        tema = argumentos.get("tema")
+        if tema:
+            tema = str(tema).strip()
+        resultado = herramientas.recomendar(tema=tema, sala_slug=sala_slug)
+        return resultado["mensaje"], resultado, _fuentes_de_resultado(nombre, resultado), _es_error_tecnico(resultado), 0
+
     if nombre in (
         "consultar_recogida",
         "reservar",
@@ -1084,30 +1758,73 @@ def _ejecutar_herramienta(
         resultado = herramientas.consultar_recogida(int(usuario_id), str(argumentos.get("titulo", "")))
         return resultado["mensaje"], resultado, [], _es_error_tecnico(resultado), 0
     if nombre == "buscar_semantico":
-        resultado = herramientas.buscar_semantico(str(argumentos.get("consulta", "")))
-        respuesta = _plantilla_busqueda(resultado["datos"]) if resultado["ok"] else resultado["mensaje"]
-    elif nombre == "buscar_exacto":
-        resultado = herramientas.buscar_exacto(
-            _titulo_material(str(argumentos.get("texto", "")))
+        resultado = herramientas.buscar_semantico(
+            str(argumentos.get("consulta", "")),
+            sala_slug=sala_slug,
         )
-        respuesta = _plantilla_busqueda(resultado["datos"]) if resultado["ok"] else resultado["mensaje"]
+        if resultado.get("sugerencia_sala"):
+            respuesta = resultado["mensaje"]
+        elif resultado["ok"]:
+            respuesta = _plantilla_busqueda(resultado["datos"], sala_info)
+        else:
+            respuesta = resultado["mensaje"]
+    elif nombre == "buscar_exacto":
+        titulo_buscado = _titulo_material(str(argumentos.get("texto", "")))
+        # Punto 4: Si se busca un material concreto (como "muéstrame más de...", etc.):
+        # Usa la misma resolución de títulos que reservar (resolver_material en todo el catálogo)
+        candidato = herramientas.resolver_material(titulo_buscado, sala_slug=None)
+        if candidato.get("ok") and candidato.get("datos"):
+            materiales_resueltos = herramientas.enriquecer_materiales(candidato["datos"][:1])
+            if materiales_resueltos:
+                mat = materiales_resueltos[0]
+                respuesta = _formato_ficha_material(mat)
+                resultado = {"ok": True, "mensaje": respuesta, "datos": materiales_resueltos}
+                return respuesta, resultado, _fuentes_de_resultado(nombre, resultado), None, 0
+
+        resultado = herramientas.buscar_exacto(
+            titulo_buscado,
+            sala_slug=sala_slug,
+        )
+        if resultado.get("sugerencia_sala"):
+            respuesta = resultado["mensaje"]
+        elif resultado["ok"]:
+            materiales_res = herramientas.enriquecer_materiales(resultado["datos"])
+            if len(materiales_res) == 1:
+                respuesta = _formato_ficha_material(materiales_res[0])
+            else:
+                respuesta = _plantilla_busqueda(resultado["datos"], sala_info)
+        else:
+            respuesta = resultado["mensaje"]
     elif nombre == "consultar_disponibilidad":
         candidato = (
             _candidato_referido(argumentos, estado)
             if "_referencia_id" in argumentos else herramientas.resolver_material(
-                _titulo_material(str(argumentos.get("titulo", "")))
+                _titulo_material(str(argumentos.get("titulo", ""))),
+                sala_slug=None,
             )
         )
         if not candidato["ok"] or not candidato["datos"]:
             resultado = candidato
-            respuesta = (
-                candidato["mensaje"]
-                if str(candidato["mensaje"]).lower().startswith("no fue posible")
-                else "No encontré ese material en el acervo."
-            )
+            if candidato.get("sugerencia_sala"):
+                respuesta = candidato["mensaje"]
+            elif str(candidato["mensaje"]).lower().startswith("no fue posible"):
+                respuesta = candidato["mensaje"]
+            else:
+                respuesta = "No encontré ese material en el acervo."
         elif len(candidato["datos"]) > 1:
+            estado["desambiguacion_pendiente"] = {
+                "tipo": "consultar_disponibilidad",
+                "items": candidato["datos"],
+                "expira": (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+            }
+            estado["catalogo_contexto"] = {
+                "conversacion_id": estado.get("conversacion_id"),
+                "usuario_id": usuario_id,
+                "items": candidato["datos"],
+                "expira": (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+            }
             resultado = candidato
-            respuesta = _plantilla_busqueda(candidato["datos"])
+            respuesta = _plantilla_busqueda(candidato["datos"], sala_info)
         else:
             material = candidato["datos"][0]
             resultado = herramientas.consultar_disponibilidad(int(material["material_id"]))
@@ -1116,8 +1833,12 @@ def _ejecutar_herramienta(
             datos = resultado.get("datos") or {}
             if resultado["ok"]:
                 datos["similitud"] = material.get("similitud")
-                respuesta = _plantilla_busqueda([datos])
+                enriquecidos = herramientas.enriquecer_materiales([datos])
+                mat_sala = enriquecidos[0].get("sala_nombre") if enriquecidos else None
+                respuesta = _plantilla_busqueda([datos], sala_info)
                 respuesta += " " + herramientas.mensaje_disponibilidad(datos)
+                if mat_sala and (not sala_info or sala_info.get("nombre") != mat_sala):
+                    respuesta += f" Está en la {mat_sala}."
             else:
                 respuesta = resultado["mensaje"]
     elif nombre == "consultar_prestamos_y_multas":
@@ -1139,6 +1860,7 @@ def _ejecutar_herramienta(
         resultado = herramientas.resumir_material(
             str(argumentos.get("titulo") or ""),
             pregunta,
+            sala_slug=sala_slug,
         )
         if not resultado.get("ok"):
             return (
@@ -1149,6 +1871,29 @@ def _ejecutar_herramienta(
                 0,
             )
         fragmentos = resultado.get("datos") or []
+
+        # Punto 4: resumir_material extractivo desde el resumen (3-4 frases limpias) + fuente; LLM solo si no hay resumen
+        resumenes = [
+            f for f in fragmentos
+            if f.get("tipo") in ("resumen_tesis", "resena_libro") and str(f.get("texto") or "").strip()
+        ]
+        if resumenes:
+            mejor_resumen = resumenes[0]
+            texto_limpio = _limpiar_texto_resumen_extractivo(str(mejor_resumen.get("texto") or ""))
+            frases = [f.strip() for f in re.split(r"(?<=[.!?])\s+", texto_limpio) if f.strip()]
+            texto = " ".join(frases[:4])
+            seccion = str(mejor_resumen.get("seccion") or ("Resumen" if mejor_resumen.get("tipo") == "resumen_tesis" else "Reseña"))
+            cita = f"Fuente: «{mejor_resumen.get('documento')}» › {seccion}."
+            respuesta = f"{texto} {cita}".strip()
+            resultado["mensaje"] = respuesta
+            return (
+                respuesta,
+                resultado,
+                _fuentes_de_resultado(nombre, resultado),
+                None,
+                0.0,
+            )
+
         contexto = "\n\n".join(
             f"[{fragmento.get('documento')} › "
             f"{'Resumen' if fragmento.get('tipo') == 'resumen_tesis' else fragmento.get('seccion') or 'Página'}]\n"
@@ -1177,7 +1922,7 @@ def _ejecutar_herramienta(
                 options={
                     "temperature": 0,
                     "num_ctx": NUM_CTX,
-                    "num_predict": 128,
+                    "num_predict": NUM_PREDICT_REDACCION,
                 },
                 keep_alive=KEEP_ALIVE,
             )
@@ -1225,12 +1970,14 @@ def _ejecutar_herramienta(
             str(argumentos.get("tema", "")),
             int(argumentos.get("cantidad", 5)),
             str(argumentos.get("norma", "APA")),
+            sala_slug=sala_slug,
         )
-        respuesta = (
-            _plantilla_bibliografia(resultado)
-            if resultado.get("ok")
-            else resultado.get("mensaje", "No encontré material del acervo sobre ese tema para armar la bibliografía.")
-        )
+        if resultado.get("sugerencia_sala"):
+            respuesta = resultado["mensaje"]
+        elif resultado.get("ok"):
+            respuesta = _plantilla_bibliografia(resultado, sala_info)
+        else:
+            respuesta = resultado.get("mensaje", "No encontré material del acervo sobre ese tema para armar la bibliografía.")
     elif nombre == "reservar":
         candidato = (
             _candidato_referido(argumentos, estado)
@@ -1246,6 +1993,17 @@ def _ejecutar_herramienta(
             )
             return respuesta, candidato, [], _es_error_tecnico(candidato), 0
         if len(candidato["datos"]) > 1:
+            estado["desambiguacion_pendiente"] = {
+                "tipo": "reservar",
+                "items": candidato["datos"],
+                "expira": (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+            }
+            estado["catalogo_contexto"] = {
+                "conversacion_id": estado.get("conversacion_id"),
+                "usuario_id": usuario_id,
+                "items": candidato["datos"],
+                "expira": (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+            }
             return (
                 "Encontré varias opciones. Indíqueme cuál desea reservar:\n"
                 + _plantilla_busqueda(candidato["datos"]),
@@ -1619,6 +2377,7 @@ def procesar_mensaje(
     modo_voz: bool = False,
     t_stt_ms: int | None = None,
     usuario_sesion: dict[str, Any] | None = None,
+    sala: str | None = None,
 ) -> dict[str, Any]:
     """Procesa un turno completo y registra estado, mensajes y tiempos."""
     texto = normalizar_consulta(texto)
@@ -1630,6 +2389,7 @@ def procesar_mensaje(
         "accion_pendiente": None,
         "esperando": None,
         "accion_tras_codigo": None,
+        "sala": None,
     }
     respuesta = ""
     intencion = "fuera_de_dominio"
@@ -1644,6 +2404,8 @@ def procesar_mensaje(
     sesion_iniciada = False
     entrada_oculta = False
     token_sesion = None
+    salas_opciones: list[dict[str, Any]] | None = None
+    sugerencia_sala: dict[str, Any] | None = None
     entrada_oculta = pin_explicito(texto)
     entrada_segura = "[PIN oculto]" if entrada_oculta else texto
     tiempos: dict[str, int | None] = {
@@ -1670,6 +2432,7 @@ def procesar_mensaje(
         estado.setdefault("accion_tras_codigo", None)
         estado.setdefault("codigo_login", None)
         estado.setdefault("accion_tras_login", None)
+        estado.setdefault("sala", None)
         if usuario_sesion is None:
             estado["accion_pendiente"] = None
         usuario_id = (
@@ -1677,6 +2440,16 @@ def procesar_mensaje(
             if usuario_sesion is not None
             else estado.get("usuario_id", usuario_id)
         )
+
+        if sala is not None:
+            sala_param = str(sala).strip().lower()
+            if sala_param in ("", "todas", "toda", "general", "null", "none"):
+                estado["sala"] = None
+            else:
+                s_obj = salas.sala_por_slug(sala_param) or salas.sala_por_slug(_detectar_area_sala(sala_param))
+                if s_obj:
+                    estado["sala"] = s_obj["slug"]
+        sala_actual_slug = estado.get("sala")
         normal_turno = _normalizar(texto)
         if not entrada_oculta and re.search(r"\bno\s+(?:(?:quiero|deseo|necesito)\s+)?reservar\b", normal_turno):
             estado["accion_pendiente"] = None
@@ -1709,7 +2482,7 @@ def procesar_mensaje(
                     accion = estado.pop("accion_tras_login", None)
                     if accion:
                         detalle, herramienta_resultado, fuentes, error_texto, _ = _ejecutar_herramienta(
-                            accion["nombre"], accion["argumentos"], usuario_id, estado
+                            accion["nombre"], accion["argumentos"], usuario_id, estado, sala_slug=sala_actual_slug
                         )
                         herramienta_usada = accion["nombre"]
                         respuesta += " " + detalle
@@ -1755,6 +2528,64 @@ def procesar_mensaje(
                 intencion = "aclarar_confirmacion"
                 respuesta = "La operación sigue pendiente. Dime sí para confirmar o no para cancelar."
 
+        # Manejo de desambiguación pendiente (ej. tras listar varias opciones para reservar o consultar)
+        if not respuesta and (desambiguacion := estado.get("desambiguacion_pendiente")):
+            try:
+                exp_d = datetime.fromisoformat(desambiguacion.get("expira", ""))
+                if exp_d.tzinfo is None:
+                    exp_d = exp_d.replace(tzinfo=timezone.utc)
+                vigente_d = exp_d >= datetime.now(timezone.utc)
+            except (TypeError, ValueError):
+                vigente_d = False
+
+            if not vigente_d:
+                estado.pop("desambiguacion_pendiente", None)
+            else:
+                normal_d = _normalizar(texto).strip(" ¿?!¡.,:;")
+                if _es_negativo(texto) or normal_d in (
+                    "no", "ninguno", "ninguna", "cancelar", "cancela",
+                    "olvidalo", "olvidelo", "olvídelo", "olvídalo",
+                    "ya no", "nada", "dejar asi", "dejarlo asi",
+                ):
+                    estado.pop("desambiguacion_pendiente", None)
+                    estado.pop("catalogo_contexto", None)
+                    intencion = "cancelar_accion (rápido)"
+                    tiempos["t_llm_ms"] = 0
+                    respuesta = "De acuerdo, lo dejamos así."
+                    herramienta_resultado = {"ok": True, "mensaje": respuesta, "datos": None}
+                else:
+                    items_d = desambiguacion.get("items", [])
+                    item_elegido = None
+                    ordinal_map = {
+                        "primero": 0, "primera": 0, "el primero": 0, "la primera": 0, "1": 0, "el 1": 0,
+                        "segundo": 1, "segunda": 1, "el segundo": 1, "la segunda": 1, "2": 1, "el 2": 1,
+                        "tercero": 2, "tercera": 2, "el tercero": 2, "la tercera": 2, "3": 2, "el 3": 2,
+                        "cuarto": 3, "cuarta": 3, "el cuarto": 3, "la cuarta": 3, "4": 3, "el 4": 3,
+                        "quinto": 4, "quinta": 4, "el quinto": 4, "la quinta": 4, "5": 4, "el 5": 4,
+                    }
+                    if normal_d in ordinal_map:
+                        idx = ordinal_map[normal_d]
+                        if idx < len(items_d):
+                            item_elegido = items_d[idx]
+                    else:
+                        palabra_c = re.sub(r"^(?:el\s+de|la\s+de|el\s+libro\s+de|el\s+|la\s+|autor)\s+", "", normal_d).strip()
+                        for it in items_d:
+                            autor_it = _normalizar(str(it.get("autor") or ""))
+                            titulo_it = _normalizar(str(it.get("titulo") or ""))
+                            if palabra_c and (palabra_c in autor_it or palabra_c in titulo_it):
+                                item_elegido = it
+                                break
+                    if item_elegido:
+                        estado.pop("desambiguacion_pendiente", None)
+                        tipo_accion = desambiguacion.get("tipo", "reservar")
+                        intencion = f"{tipo_accion} (rápido)"
+                        herramienta_usada = tipo_accion
+                        tiempos["t_llm_ms"] = 0
+                        args = {"titulo": item_elegido["titulo"], "_referencia_id": item_elegido.get("material_id")}
+                        respuesta, herramienta_resultado, fuentes, error_texto, _ = _ejecutar_herramienta(
+                            tipo_accion, args, usuario_id, estado, sala_slug=sala_actual_slug
+                        )
+
         if not respuesta:
             contextual = re.match(r"^(?:mi codigo(?: es| les)?|codigo(?: es| les)?|soy el)\s+", _normalizar(texto))
             codigo_encontrado = extraer_codigo(texto) if contextual or estado.get("esperando") == "codigo" else None
@@ -1772,29 +2603,72 @@ def procesar_mensaje(
             elif usuario_sesion is not None and re.search(r"\busuario\s+\d{3,10}\b", _normalizar(texto)):
                 intencion = "identificacion_segura"
                 respuesta = f"Ya iniciaste sesión como {usuario_sesion['nombre']}. Solo puedo consultar tu propia cuenta."
-            elif _es_saludo_puro(texto):
-                intencion = "saludo"
+            elif _es_quitar_sala(texto):
+                intencion = "elegir_sala (rápido)"
+                estado["sala"] = None
+                sala_actual_slug = None
+                respuesta = "Ahora estamos consultando en toda la biblioteca. ¿Qué buscas?"
+                salas_opciones = None
+                sugerencia_sala = None
+            elif _es_consulta_salas(texto):
+                intencion = "elegir_sala (rápido)"
+                opciones = [salas.opcion_sala(s) for s in salas.listar_salas()]
+                salas_opciones = opciones
                 respuesta = (
-                    "¡Hola! Puedo ayudarle a buscar libros y otros materiales, consultar "
-                    "disponibilidad, revisar préstamos y multas, hacer reservas y responder "
-                    "preguntas sobre el reglamento y la citación."
+                    "Tenemos 5 salas temáticas: Sala de Ingeniería y Tecnología, "
+                    "Sala de Ciencias Agrarias y Ambientales, Sala de Administración y Negocios, "
+                    "Sala de Contaduría y Finanzas, y Sala de Investigación y Escritura. "
+                    "¿A cuál te gustaría ir?"
                 )
+                sugerencia_sala = None
+            elif (slug_elegido := _es_intencion_elegir_sala(texto)) is not None:
+                estado["sala"] = slug_elegido
+                sala_actual_slug = slug_elegido
+                sala_info = salas.sala_por_slug(slug_elegido)
+                intencion = f"elegir_sala (rápido) · sala {slug_elegido}"
+                bibliotecario = sala_info["bibliotecario"]["nombre"]
+                nombre_sala = sala_info["nombre"]
+                libros = sala_info["libros"]
+                tesis = sala_info["tesis"]
+                total = sala_info.get("total", libros + tesis)
+                nombre_usuario = usuario_sesion.get("nombre") if usuario_sesion else None
+                saludo_prefijo = f"Hola, {nombre_usuario}." if nombre_usuario else "Hola."
+                conteo_frase = salas.formato_conteo_materiales(libros, tesis, total)
+                respuesta = (
+                    f"{saludo_prefijo} Soy {bibliotecario}, de la {nombre_sala}. "
+                    f"{conteo_frase} ¿Qué buscas?"
+                )
+                salas_opciones = None
+                sugerencia_sala = None
+            elif _es_saludo_puro(texto):
+                intencion = "saludo (rápido)"
+                if sala_actual_slug:
+                    sala_info = salas.sala_por_slug(sala_actual_slug)
+                    bibliotecario = sala_info["bibliotecario"]["nombre"]
+                    nombre_sala = sala_info["nombre"]
+                    respuesta = f"¡Hola! Soy {bibliotecario}, de la {nombre_sala}. ¿Qué buscas hoy?"
+                else:
+                    respuesta = (
+                        "¡Hola! Puedo ayudarle a buscar libros y otros materiales, consultar "
+                        "disponibilidad, revisar préstamos y multas, hacer reservas y responder "
+                        "preguntas sobre el reglamento y la citación."
+                    )
             elif _estudio_sin_tema(texto):
                 estado["tema_estudio_pendiente"] = True
-                intencion = "aclarar_tema_estudio"
+                intencion = "aclarar_tema_estudio (rápido)"
                 respuesta = "¿De qué materia o tema es el parcial? Por ejemplo: redes, contabilidad o ecología. Así puedo recomendarte libros del catálogo para estudiar."
 
         if not respuesta and estado.get("tema_estudio_pendiente"):
             estado["tema_estudio_pendiente"] = False
             if _es_negativo(texto):
-                intencion = "cancelar_accion"
+                intencion = "cancelar_accion (rápido)"
                 respuesta = "De acuerdo. Cuando quieras, dime qué tema necesitas estudiar."
             elif _es_afirmativo(texto):
                 estado["tema_estudio_pendiente"] = True
-                intencion = "aclarar_tema_estudio"
+                intencion = "aclarar_tema_estudio (rápido)"
                 respuesta = "Dime la materia o el tema del parcial para poder recomendarte un libro."
             elif intencion_por_palabras(texto) == "fuera_de_dominio" and re.match(r"^(?:¿|como\b|que\b|cual\b|cuando\b|donde\b|por que\b|a que\b)", _normalizar(texto).strip()):
-                intencion = "aclarar_tema_estudio"
+                intencion = "aclarar_tema_estudio (rápido)"
                 respuesta = "Podemos cambiar de consulta. Formula tu pregunta completa, o dime la materia del parcial."
                 estado["tema_estudio_pendiente"] = True
             elif intencion_por_palabras(texto) in ("fuera_de_dominio", "buscar_semantico") and not _pregunta_fuera_de_dominio(texto):
@@ -1803,7 +2677,7 @@ def procesar_mensaje(
 
         if not respuesta and _pide_recomendacion_contextual(texto):
             respuesta, materiales = _recomendar_resultados(estado, identificador, usuario_id)
-            intencion = "recomendar_contexto" if materiales else "aclarar_recomendacion"
+            intencion = "recomendar_contexto (rápido)" if materiales else "aclarar_recomendacion (rápido)"
             herramienta_usada = "recomendar_contexto" if materiales else None
 
         referencia = None
@@ -1812,114 +2686,102 @@ def procesar_mensaje(
             if referencia is None:
                 referencia = _referencia_catalogo(texto, estado, identificador, usuario_id)
             if referencia and referencia[2]:
-                intencion = "aclarar_material"
+                intencion = "aclarar_material (rápido)"
                 respuesta = referencia[2]
 
         if not respuesta:
-            mensajes = [{"role": "system", "content": _prompt_sistema()}]
-            mensajes.extend(_mensaje_historial(identificador))
             llamada_nombre: str | None = None
             argumentos: dict[str, Any] = {}
-            origen_herramienta = "palabras_clave"
-            if referencia or _seleccion_directa_segura(texto):
-                tiempos["t_llm_ms"] = 0
-            else:
-                try:
-                    salida_modelo, tiempo_llm = _llamar_modelo(
-                        mensajes, con_herramientas=True, num_predict=128
-                    )
-                    tiempos["t_llm_ms"] = round(tiempo_llm)
-                    llamada_nombre, argumentos = _llamada_herramienta(salida_modelo)
-                    if llamada_nombre not in _HERRAMIENTAS:
-                        llamada_nombre = None
-                    if llamada_nombre:
-                        origen_herramienta = "llm"
-                except Exception as error:
-                    error_texto = str(error)
-            palabras = intencion_por_palabras(texto)
-            if _pregunta_fuera_de_dominio(texto):
-                llamada_nombre = None
-                palabras = "fuera_de_dominio"
-            if palabras != "fuera_de_dominio" and llamada_nombre != palabras:
-                llamada_nombre = palabras
-                origen_herramienta = "palabras_clave"
-                argumentos = {}
-                if llamada_nombre == "buscar_semantico":
-                    argumentos["consulta"] = texto
-                elif llamada_nombre == "buscar_exacto":
-                    argumentos["texto"] = texto.strip(" \"'“”")
-                elif llamada_nombre in ("consultar_disponibilidad", "reservar"):
-                    argumentos["titulo"] = texto
-                elif llamada_nombre == "renovar_prestamo":
-                    argumentos["titulo"] = _titulo_renovacion(texto)
-                elif llamada_nombre == "responder_con_documentos":
-                    argumentos["pregunta"] = texto
-                elif llamada_nombre == "resumir_material":
-                    argumentos.update(
-                        titulo=_titulo_resumen_material(texto),
-                        pregunta=texto,
-                    )
-            elif llamada_nombre is None and palabras != "fuera_de_dominio":
-                llamada_nombre = palabras
-                origen_herramienta = "palabras_clave"
-                if llamada_nombre == "buscar_semantico":
-                    argumentos = {"consulta": texto}
-                elif llamada_nombre == "buscar_exacto":
-                    argumentos = {"texto": texto.strip(" \"'“”")}
-                elif llamada_nombre in ("consultar_disponibilidad", "reservar"):
-                    argumentos = {"titulo": texto}
-                elif llamada_nombre == "renovar_prestamo":
-                    argumentos = {"titulo": _titulo_renovacion(texto)}
-                elif llamada_nombre == "responder_con_documentos":
-                    argumentos = {"pregunta": texto}
-                elif llamada_nombre == "resumir_material":
-                    argumentos = {
-                        "titulo": _titulo_resumen_material(texto),
-                        "pregunta": texto,
-                    }
+            origen_herramienta = "rápido"
 
-            if llamada_nombre == "renovar_prestamo" and palabras == "renovar_prestamo":
-                argumentos["titulo"] = _titulo_renovacion(texto)
-            if llamada_nombre == "consultar_recogida":
-                argumentos["titulo"] = texto
-            if llamada_nombre == "resumir_material":
-                argumentos = {
-                    "titulo": _titulo_resumen_material(texto),
-                    "pregunta": texto,
-                }
-            if llamada_nombre == "generar_bibliografia":
-                argumentos = _extraer_peticion_bibliografia(texto) or {
-                    "tema": texto,
-                    "cantidad": 5,
-                    "norma": "APA",
-                }
-            if llamada_nombre in {
-                "buscar_exacto",
-                "consultar_disponibilidad",
-                "reservar",
-                "cancelar_reserva",
-            }:
-                llave = "texto" if llamada_nombre == "buscar_exacto" else "titulo"
-                if llamada_nombre == palabras:
-                    argumentos[llave] = (
-                        _titulo_cancelacion(texto)
-                        if llamada_nombre == "cancelar_reserva"
-                        else _titulo_material(texto)
-                    )
-
-            # No aceptar IDs internos del modelo: solo los resueltos en este turno.
-            argumentos.pop("_referencia_id", None)
-            argumentos.pop("_propia_id", None)
             if referencia:
                 llamada_nombre, argumentos, _ = referencia
                 if "_propia_id" in argumentos:
                     estado.pop("seleccion_propia", None)
-                origen_herramienta = "contexto_local"
+                origen_herramienta = "rápido"
+                tiempos["t_llm_ms"] = 0
             else:
                 estado.pop("catalogo_contexto", None)
+                palabras = intencion_por_palabras(texto)
+                es_fuera_dominio = _pregunta_fuera_de_dominio(texto)
+
+                if es_fuera_dominio:
+                    llamada_nombre = None
+                    origen_herramienta = "rápido"
+                    tiempos["t_llm_ms"] = 0
+                elif palabras != "fuera_de_dominio":
+                    # Enrutador rápido: intención identificada con confianza por reglas deterministas
+                    llamada_nombre = palabras
+                    origen_herramienta = "rápido"
+                    tiempos["t_llm_ms"] = 0
+                    argumentos = {}
+
+                    if llamada_nombre == "presentacion":
+                        argumentos = {}
+                    elif llamada_nombre == "cortesia":
+                        _, tipo_c = _es_cortesia(texto)
+                        argumentos = {"tipo": tipo_c}
+                    elif llamada_nombre == "panorama_catalogo":
+                        argumentos = {}
+                    elif llamada_nombre == "mas_prestados":
+                        argumentos = {}
+                    elif llamada_nombre == "ubicacion_material":
+                        _, tit_ub = _extraer_peticion_ubicacion(texto)
+                        argumentos = {"titulo": tit_ub or _titulo_material(texto)}
+                    elif llamada_nombre == "recomendar":
+                        _, tema_rec = _extraer_peticion_recomendacion(texto)
+                        argumentos = {"tema": tema_rec}
+                    elif llamada_nombre == "buscar_exacto":
+                        argumentos = {"texto": _titulo_material(texto)}
+                    elif llamada_nombre in ("consultar_disponibilidad", "reservar"):
+                        argumentos = {"titulo": _titulo_material(texto)}
+                    elif llamada_nombre == "cancelar_reserva":
+                        argumentos = {"titulo": _titulo_cancelacion(texto)}
+                    elif llamada_nombre == "renovar_prestamo":
+                        argumentos = {"titulo": _titulo_renovacion(texto)}
+                    elif llamada_nombre == "consultar_recogida":
+                        argumentos = {"titulo": texto}
+                    elif llamada_nombre == "consultar_prestamos_y_multas":
+                        argumentos = {}
+                    elif llamada_nombre == "responder_con_documentos":
+                        argumentos = {"pregunta": texto}
+                    elif llamada_nombre == "resumir_material":
+                        argumentos = {
+                            "titulo": _titulo_resumen_material(texto),
+                            "pregunta": texto,
+                        }
+                    elif llamada_nombre == "generar_bibliografia":
+                        argumentos = _extraer_peticion_bibliografia(texto) or {
+                            "tema": texto,
+                            "cantidad": 5,
+                            "norma": "APA",
+                        }
+                    elif llamada_nombre == "buscar_semantico":
+                        argumentos = {"consulta": texto}
+                else:
+                    # Frase ambigua: llamada de tool calling al LLM con historial acotado (2 turnos) y prompt breve (<600 chars)
+                    sala_info_actual = salas.sala_por_slug(sala_actual_slug)
+                    mensajes = [{"role": "system", "content": _prompt_sistema(sala_info_actual)}]
+                    mensajes.extend(_mensaje_historial(identificador))
+                    try:
+                        salida_modelo, tiempo_llm = _llamar_modelo(
+                            mensajes, con_herramientas=True, num_predict=NUM_PREDICT_TOOL_CALLING
+                        )
+                        tiempos["t_llm_ms"] = round(tiempo_llm)
+                        llamada_nombre, argumentos = _llamada_herramienta(salida_modelo)
+                        if llamada_nombre not in _HERRAMIENTAS:
+                            llamada_nombre = None
+                        origen_herramienta = "llm" if llamada_nombre else "rápido"
+                    except Exception as error:
+                        error_texto = str(error)
+                        origen_herramienta = "rápido"
+
+            # No aceptar IDs internos del modelo: solo los resueltos en este turno.
+            argumentos.pop("_referencia_id", None)
+            argumentos.pop("_propia_id", None)
 
             if llamada_nombre is None:
-                intencion = "fuera_de_dominio" + (" (palabras_clave)" if error_texto else "")
+                intencion = f"fuera_de_dominio ({origen_herramienta})"
                 respuesta = "Solo puedo ayudar con la biblioteca: buscar material, préstamos, reservas, reglamento y citación."
                 if error_texto and "modelo de lenguaje no está disponible" in error_texto:
                     respuesta = "El modelo de lenguaje no está disponible; inicie Ollama. " + respuesta
@@ -1937,17 +2799,17 @@ def procesar_mensaje(
                     }
                 )
                 respuesta, herramienta_resultado, fuentes, error_herramienta, tiempo_redaccion = _ejecutar_herramienta(
-                    llamada_nombre, argumentos, usuario_id, estado
+                    llamada_nombre, argumentos, usuario_id, estado, sala_slug=sala_actual_slug
                 )
-                # El LLM a veces manda a búsqueda semántica preguntas ajenas (p. ej. fútbol).
-                # Si las palabras clave tampoco ven tema de biblioteca y no hay resultados,
-                # se clasifica como fuera de dominio.
+                if herramienta_resultado and herramienta_resultado.get("sugerencia_sala"):
+                    sugerencia_sala = herramienta_resultado["sugerencia_sala"]
                 if (
                     llamada_nombre == "buscar_semantico"
-                    and palabras == "fuera_de_dominio"
+                    and origen_herramienta == "llm"
                     and not (herramienta_resultado or {}).get("datos")
+                    and not sugerencia_sala
                 ):
-                    intencion = "fuera_de_dominio (llm sin resultados)"
+                    intencion = "fuera_de_dominio (llm)"
                     herramienta_usada = None
                     respuesta = "Solo puedo ayudar con la biblioteca: buscar material, préstamos, reservas, reglamento y citación."
                 if tiempo_redaccion:
@@ -1974,13 +2836,28 @@ def procesar_mensaje(
                     "referencias": datos_bibliografia.get("referencias", []),
                 }
 
+        if not sala_actual_slug and not salas_opciones and not sugerencia_sala and herramienta_usada in ("buscar_semantico", "buscar_exacto"):
+            area_slug = _detectar_area_sala(texto)
+            if area_slug:
+                sala_prop = salas.sala_por_slug(area_slug)
+                if sala_prop:
+                    salas_opciones = [salas.opcion_sala(s) for s in salas.listar_salas()]
+                    respuesta += (
+                        f"\n\n¿Quieres ir a la {sala_prop['nombre']}? "
+                        f"Ahí está todo lo de {sala_prop['descripcion']}."
+                    )
+
         respuesta = _limpiar_respuesta(respuesta)
         if herramienta_usada in {
             "buscar_semantico",
             "buscar_exacto",
             "consultar_disponibilidad",
+            "panorama_catalogo",
+            "mas_prestados",
+            "ubicacion_material",
+            "recomendar",
         }:
-            datos = (herramienta_resultado or {}).get("datos")
+            datos = (herramienta_resultado or {}).get("materiales") or (herramienta_resultado or {}).get("datos")
             candidatos = datos if isinstance(datos, list) else (
                 [datos] if isinstance(datos, dict) and datos.get("material_id") else []
             )
@@ -1990,7 +2867,15 @@ def procesar_mensaje(
                     material["similitud"] = None
         elif herramienta_usada == "resumir_material":
             materiales = (herramienta_resultado or {}).get("materiales") or []
-        if herramienta_usada in {"buscar_semantico", "buscar_exacto", "consultar_disponibilidad"}:
+        if herramienta_usada in {
+            "buscar_semantico",
+            "buscar_exacto",
+            "consultar_disponibilidad",
+            "panorama_catalogo",
+            "mas_prestados",
+            "ubicacion_material",
+            "recomendar",
+        }:
             items = [{"material_id": int(m["material_id"]), "titulo": str(m["titulo"])[:300], "similitud": m.get("similitud")}
                      for m in materiales[:5] if m.get("material_id") and m.get("titulo")]
             estado["catalogo_contexto"] = {
@@ -2023,13 +2908,30 @@ def procesar_mensaje(
                 re.sub(r"[\[\]_*#<>|]", "", str(ref.get("titulo", ""))).strip()
                 for ref in referencias_voz[:5]
             ]
+            cant_ref_voz = len(referencias_voz)
+            texto_ref_voz = "1 referencia" if cant_ref_voz == 1 else f"{cant_ref_voz} referencias"
             respuesta_voz = (
-                f"Encontré {len(referencias_voz)} referencias en formato "
+                f"Encontré {texto_ref_voz} en formato "
                 f"{bibliografia_datos.get('norma', 'APA')}. Los títulos son: "
                 + "; ".join(titulo for titulo in titulos if titulo)
             )
         else:
             respuesta_voz = "No encontré material del acervo sobre ese tema para armar la bibliografía."
+    sala_actual_slug = estado.get("sala")
+    if sala_actual_slug and not intencion.endswith(f" · sala {sala_actual_slug}"):
+        intencion = f"{intencion} · sala {sala_actual_slug}"
+
+    sala_info_final = salas.sala_por_slug(sala_actual_slug)
+    sala_serializada = (
+        {
+            "slug": sala_info_final["slug"],
+            "nombre": sala_info_final["nombre"],
+            "bibliotecario": sala_info_final["bibliotecario"],
+        }
+        if sala_info_final
+        else None
+    )
+
     resultado = {
         "conversacion_id": identificador or conversacion_id,
         "respuesta": respuesta,
@@ -2057,6 +2959,9 @@ def procesar_mensaje(
         "esperando": estado.get("esperando"),
         "sesion_iniciada": sesion_iniciada,
         "entrada_oculta": entrada_oculta,
+        "sala": sala_serializada,
+        "salas_opciones": salas_opciones,
+        "sugerencia_sala": sugerencia_sala,
     }
     try:
         if identificador:

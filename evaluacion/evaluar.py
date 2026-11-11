@@ -23,10 +23,11 @@ try:
 except (AttributeError, OSError):
     pass
 
-from app import auth, mapa, rag
+from app import auth, investigacion, mapa, rag
 from app.agente import procesar_mensaje
 from app.config import EMBED_MODEL, LLM_MODEL, LLM_MODEL_RESPALDO
 from app.db import conectar, conexion
+from refrescar_demo import refrescar_demo
 
 CARPETA_EVALUACION = RAIZ / "evaluacion"
 RUTA_CASOS = CARPETA_EVALUACION / "casos_prueba.json"
@@ -74,6 +75,25 @@ def filas_material(ids: list[int]) -> dict[int, dict[str, Any]]:
             )
             for fila in cursor.fetchall()
         }
+
+
+def salas_de_materiales(ids: list[int]) -> dict[int, str | None]:
+    """Consulta por SQL la sala (slug) a la que pertenece cada material."""
+    if not ids:
+        return {}
+    with conexion() as conn, conn.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT m.id, COALESCE(s.slug, sp_s.slug)
+            FROM public.material m
+            LEFT JOIN public.salas s ON m.sala_id = s.id
+            LEFT JOIN public.salas_programas sp ON lower(btrim(sp.programa)) = lower(btrim(m.programa))
+            LEFT JOIN public.salas sp_s ON sp.sala_id = sp_s.id
+            WHERE m.id = ANY(%s)
+            """,
+            (ids,),
+        )
+        return {fila[0]: fila[1] for fila in cursor.fetchall()}
 
 
 def verificar_datos_referencia(
@@ -218,6 +238,118 @@ def evaluar_comprobaciones_declarativas(
             f"se esperaba alguna de {palabras_transcripcion}; transcripción: "
             f"«{registro.get('transcripcion', '')}»",
         )
+    if "sala_slug" in esperado:
+        slug_esperado = esperado["sala_slug"]
+        sala_obj = registro.get("sala")
+        if slug_esperado is None:
+            ok = sala_obj is None or (isinstance(sala_obj, dict) and sala_obj.get("slug") is None)
+            detalle = "sala es null (toda la biblioteca)" if ok else f"se esperaba sala null, pero se obtuvo {sala_obj!r}"
+            comprobar(registro, "sala_slug", ok, detalle)
+        else:
+            if not isinstance(sala_obj, dict):
+                comprobar(
+                    registro,
+                    "sala_slug",
+                    False,
+                    f"el backend no devolvió 'sala' como objeto (esperado slug {slug_esperado!r}, obtenido {sala_obj!r})",
+                )
+            else:
+                slug_obtenido = sala_obj.get("slug")
+                comprobar(
+                    registro,
+                    "sala_slug",
+                    slug_obtenido == slug_esperado,
+                    f"esperado slug {slug_esperado!r}, obtenido {slug_obtenido!r}",
+                )
+    if "sugerencia_sala_slug" in esperado:
+        slug_esperado = esperado["sugerencia_sala_slug"]
+        sug_obj = registro.get("sugerencia_sala")
+        if slug_esperado is None:
+            comprobar(
+                registro,
+                "sugerencia_sala_slug",
+                sug_obj is None,
+                f"esperado sin sugerencia_sala, obtenido {sug_obj!r}",
+            )
+        else:
+            if not isinstance(sug_obj, dict):
+                comprobar(
+                    registro,
+                    "sugerencia_sala_slug",
+                    False,
+                    f"el backend no devolvió 'sugerencia_sala' (esperado slug {slug_esperado!r}, obtenido {sug_obj!r})",
+                )
+            else:
+                slug_obtenido = sug_obj.get("slug")
+                comprobar(
+                    registro,
+                    "sugerencia_sala_slug",
+                    slug_obtenido == slug_esperado,
+                    f"esperado sugerencia_sala {slug_esperado!r}, obtenido {slug_obtenido!r}",
+                )
+    if "salas_opciones_min" in esperado:
+        minimo = esperado["salas_opciones_min"]
+        opciones = registro.get("salas_opciones")
+        if not isinstance(opciones, list):
+            comprobar(
+                registro,
+                "salas_opciones_min",
+                False,
+                f"el backend no devolvió la lista 'salas_opciones' (esperado mínimo {minimo}, obtenido {opciones!r})",
+            )
+        else:
+            comprobar(
+                registro,
+                "salas_opciones_min",
+                len(opciones) >= minimo,
+                f"esperadas mínimo {minimo} salas_opciones, obtenidas {len(opciones)}",
+            )
+    if "materiales_misma_sala" in esperado:
+        sala_esperada = esperado["materiales_misma_sala"]
+        materiales = registro.get("materiales") or []
+        if not materiales:
+            comprobar(
+                registro,
+                "materiales_misma_sala",
+                False,
+                f"el backend no devolvió materiales (esperados materiales de sala {sala_esperada!r})",
+            )
+        else:
+            ids = [
+                int(m["material_id"]) if "material_id" in m else int(m["id"])
+                for m in materiales
+                if isinstance(m, dict) and (m.get("material_id") is not None or m.get("id") is not None)
+            ]
+            if not ids:
+                comprobar(
+                    registro,
+                    "materiales_misma_sala",
+                    False,
+                    "los materiales devueltos no tienen 'material_id' ni 'id' identificable",
+                )
+            else:
+                try:
+                    mapa_salas = salas_de_materiales(ids)
+                    discrepancias = []
+                    for mat_id in ids:
+                        slug_real = mapa_salas.get(mat_id)
+                        if slug_real != sala_esperada:
+                            discrepancias.append(f"material {mat_id} (sala={slug_real!r})")
+                    comprobar(
+                        registro,
+                        "materiales_misma_sala",
+                        not discrepancias,
+                        f"todos los {len(ids)} materiales pertenecen a la sala {sala_esperada!r}"
+                        if not discrepancias
+                        else f"materiales fuera de la sala {sala_esperada!r}: {', '.join(discrepancias)}",
+                    )
+                except Exception as error:
+                    comprobar(
+                        registro,
+                        "materiales_misma_sala",
+                        False,
+                        f"error al verificar salas de materiales por SQL: {error}",
+                    )
 
 
 def registrar_intencion_y_herramienta(
@@ -252,6 +384,33 @@ def registrar_intencion_y_herramienta(
         )
 
 
+def _llamar_procesar_mensaje(
+    texto: str,
+    conversacion_id: str | None,
+    modo_voz: bool,
+    usuario_sesion: dict[str, Any] | None,
+    sala: str | None = None,
+) -> dict[str, Any]:
+    """Invoca procesar_mensaje enviando sala si el backend la soporta; si no, la invoca sin sala."""
+    try:
+        return procesar_mensaje(
+            texto,
+            conversacion_id,
+            modo_voz=modo_voz,
+            usuario_sesion=usuario_sesion,
+            sala=sala,
+        )
+    except TypeError as err:
+        if "sala" in str(err) or "unexpected keyword" in str(err):
+            return procesar_mensaje(
+                texto,
+                conversacion_id,
+                modo_voz=modo_voz,
+                usuario_sesion=usuario_sesion,
+            )
+        raise
+
+
 def ejecutar_conversacion(caso: dict[str, Any]) -> dict[str, Any]:
     conversacion_id = None
     resultado: dict[str, Any] = {}
@@ -259,12 +418,14 @@ def ejecutar_conversacion(caso: dict[str, Any]) -> dict[str, Any]:
     usuario_sesion = auth.usuario_por_codigo(str(codigo_sesion)) if codigo_sesion else None
     if codigo_sesion and usuario_sesion is None:
         raise RuntimeError(f"No existe una cuenta activa para la sesión de prueba {codigo_sesion}.")
+    sala = caso.get("sala")
     for turno in caso.get("conversacion", []):
-        resultado = procesar_mensaje(
+        resultado = _llamar_procesar_mensaje(
             turno,
             conversacion_id,
             modo_voz=bool(caso.get("modo_voz")),
             usuario_sesion=usuario_sesion,
+            sala=sala,
         )
         conversacion_id = resultado.get("conversacion_id")
     return resultado
@@ -373,11 +534,21 @@ def evaluar_mapa(caso: dict[str, Any], registro: dict[str, Any]) -> None:
     if endpoint == "GET /api/mapa":
         datos = mapa.obtener_puntos()
         puntos = datos["puntos"] if isinstance(datos, dict) else datos
+        cantidad_esperada = esperado["num_puntos"]
+        if cantidad_esperada == "igual_a_materiales_con_embeddings":
+            with conexion() as conn, conn.cursor() as cursor:
+                cursor.execute(
+                    "SELECT count(DISTINCT d.material_id) "
+                    "FROM conocimiento.documentos d "
+                    "WHERE d.material_id IS NOT NULL "
+                    "AND d.tipo IN ('resumen_tesis','resena_libro')"
+                )
+                cantidad_esperada = cursor.fetchone()[0]
         comprobar(
             registro,
             "num_puntos",
-            len(puntos) == esperado["num_puntos"],
-            f"{len(puntos)} puntos; esperados {esperado['num_puntos']}",
+            len(puntos) == cantidad_esperada,
+            f"{len(puntos)} puntos; esperados {cantidad_esperada}",
         )
         finitos = all(
             math.isfinite(float(punto["x"])) and math.isfinite(float(punto["y"]))
@@ -574,6 +745,10 @@ def nueva_ficha(caso: dict[str, Any]) -> dict[str, Any]:
         "comprobaciones": [],
         "error": None,
         "requiere_login": False,
+        "sala_entrada": caso.get("sala"),
+        "sala": None,
+        "sugerencia_sala": None,
+        "salas_opciones": None,
         "duracion_ms": None,
         "precision_top3": None,
         "recuperados": None,
@@ -588,6 +763,7 @@ def evaluar_caso_texto(caso: dict[str, Any], registro: dict[str, Any]) -> None:
         "intencion", "herramienta", "respuesta", "respuesta_voz", "fuentes",
         "materiales", "accion_pendiente", "tiempos", "bibliografia",
         "esperando", "sesion_iniciada", "entrada_oculta", "usuario",
+        "sala", "sugerencia_sala", "salas_opciones",
     ):
         registro[campo] = resultado.get(campo)
     registro["avisos"] = resultado.get("avisos")
@@ -667,7 +843,7 @@ def evaluar_caso_login_voz(caso: dict[str, Any], registro: dict[str, Any]) -> No
         "intencion", "herramienta", "respuesta", "respuesta_voz", "fuentes",
         "materiales", "accion_pendiente", "tiempos", "bibliografia", "avisos",
         "esperando", "sesion_iniciada", "entrada_oculta", "usuario",
-        "requiere_login",
+        "requiere_login", "sala", "sugerencia_sala", "salas_opciones",
     ):
         registro[campo] = resultado.get(campo)
     registro["resultados_turno"] = resultados_turno
@@ -682,6 +858,112 @@ def evaluar_caso_mapa(caso: dict[str, Any], registro: dict[str, Any]) -> None:
     evaluar_mapa(caso, registro)
     registro["herramienta"] = "mapa"
     registro["recuperados"] = recuperar_top3(caso, registro)
+
+
+def evaluar_caso_investigacion(
+    caso: dict[str, Any], registro: dict[str, Any]
+) -> None:
+    entrada = caso.get("entrada") or {}
+    inicio = perf_counter()
+    resultado = investigacion.investigar(
+        entrada.get("tema", ""), entrada.get("programa")
+    )
+    registro["tiempos"] = {
+        "t_total_ms": round((perf_counter() - inicio) * 1000)
+    }
+    registro["respuesta"] = resultado.get("respuesta", "")
+    registro["materiales"] = resultado.get("materiales") or []
+    registro["fuentes"] = resultado.get("fuentes") or []
+    registro["bibliografia"] = resultado.get("bibliografia") or []
+
+    esperado = caso.get("esperado") or {}
+    materiales = registro["materiales"]
+    fuentes = registro["fuentes"]
+    respuesta = str(registro["respuesta"] or "")
+    ids_materiales = [material.get("material_id") for material in materiales]
+    ids_fuentes = [fuente.get("material_id") for fuente in fuentes]
+    citas = [int(cita) for cita in re.findall(r"\[material\s+(\d+)\]", respuesta)]
+
+    if "ok" in esperado:
+        comprobar(
+            registro, "ok", resultado.get("ok") is esperado["ok"],
+            f"esperado {esperado['ok']!r}, obtenido {resultado.get('ok')!r}",
+        )
+    for clave, cantidad in (
+        ("min_materiales", len(materiales)),
+        ("max_materiales", len(materiales)),
+        ("min_fuentes", len(fuentes)),
+        ("max_fuentes", len(fuentes)),
+    ):
+        if clave in esperado:
+            minimo = clave.startswith("min_")
+            pasa = cantidad >= esperado[clave] if minimo else cantidad <= esperado[clave]
+            comprobar(
+                registro, clave, pasa,
+                f"esperado {'>=' if minimo else '<='} {esperado[clave]}, obtenido {cantidad}",
+            )
+    if "citas_validas" in esperado:
+        ids_validos = set(ids_materiales) | set(ids_fuentes)
+        citas_validas = all(cita in ids_validos for cita in citas)
+        comprobar(
+            registro, "citas_validas", citas_validas,
+            f"citas {citas!r}; IDs devueltos {sorted(ids_validos)!r}",
+        )
+    if "extractos_literales" in esperado:
+        fuentes_validas = all(
+            float(fuente.get("similitud") or 0) >= investigacion.UMBRAL_SIMILITUD
+            and bool(str(fuente.get("texto") or "").strip())
+            for fuente in fuentes
+        )
+        extractos_presentes = all(
+            any(
+                fuente.get("material_id") == cita
+                and str(fuente.get("texto") or "")[:280] in respuesta
+                for fuente in fuentes
+            )
+            for cita in citas
+        )
+        comprobar(
+            registro, "extractos_literales",
+            fuentes_validas and extractos_presentes,
+            "todas las fuentes superan el umbral, tienen texto y respaldan literalmente cada cita",
+        )
+    if "tiene_bibliografia" in esperado:
+        comprobar(
+            registro, "tiene_bibliografia",
+            len(registro["bibliografia"]) >= 1,
+            f"referencias encontradas: {len(registro['bibliografia'])}",
+        )
+    if "programa_exacto" in esperado:
+        ids = list(dict.fromkeys(ids_materiales))
+        with conexion() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT id, lower(btrim(programa)) FROM public.material "
+                "WHERE id = ANY(%s)",
+                (ids,),
+            )
+            programas = dict(cursor.fetchall())
+        programa_esperado = esperado["programa_exacto"].strip().lower()
+        programa_exacto = all(
+            material_id in programas
+            and programas[material_id] == programa_esperado
+            for material_id in ids_materiales
+        )
+        comprobar(
+            registro, "programa_exacto", programa_exacto,
+            f"esperado {programa_esperado!r}; programas obtenidos "
+            f"{[programas.get(material_id) for material_id in ids_materiales]!r}",
+        )
+    if resultado.get("ok") is True:
+        primeros = materiales[:3]
+        aciertos = sum(
+            float(material.get("similitud") or 0) >= investigacion.UMBRAL_SIMILITUD
+            for material in primeros
+        )
+        registro["precision_top3"] = aciertos / len(primeros) if primeros else 0.0
+        registro["recuperados"] = [
+            str(material.get("titulo") or "") for material in primeros
+        ]
 
 
 def evaluar_caso_audio(
@@ -701,8 +983,13 @@ def evaluar_caso_audio(
         argumentos_peticion: dict[str, Any] = {
             "files": {"audio": (ruta.name, audio, "audio/wav")}
         }
+        datos_formulario = {}
         if conversacion_id:
-            argumentos_peticion["data"] = {"conversacion_id": conversacion_id}
+            datos_formulario["conversacion_id"] = conversacion_id
+        if caso.get("sala"):
+            datos_formulario["sala"] = caso["sala"]
+        if datos_formulario:
+            argumentos_peticion["data"] = datos_formulario
         respuesta_http = cliente.post("/api/voz", **argumentos_peticion)
         datos = respuesta_http.json()
         conversacion_id = datos.get("conversacion_id", conversacion_id)
@@ -747,7 +1034,10 @@ def evaluar_caso_audio(
             if tiempos.get(etapa) is not None
         ]
         registro["tiempos"][etapa] = sum(muestras) if muestras else None
-    for campo in ("esperando", "sesion_iniciada", "entrada_oculta", "usuario", "requiere_login"):
+    for campo in (
+        "esperando", "sesion_iniciada", "entrada_oculta", "usuario",
+        "requiere_login", "sala", "sugerencia_sala", "salas_opciones",
+    ):
         registro[campo] = datos.get(campo)
     evaluar_comprobaciones_declarativas(caso, registro)
     registrar_intencion_y_herramienta(caso, registro)
@@ -1285,7 +1575,7 @@ def generar_reporte(
             "## Reproducción",
             "",
             "Desde cualquier carpeta, ejecute `python ruta/al/proyecto/evaluacion/evaluar.py`. "
-            "Use `--solo TXT`, `--solo AUD`, `--solo BIB` o `--solo MAPA` para limitar "
+            "Use `--solo TXT`, `--solo AUD`, `--solo BIB`, `--solo MAPA`, `--solo INV` o `--solo SALAS` para limitar "
             "la ejecución; `--sin-audio` omite los casos de audio.",
             "",
         ]
@@ -1302,7 +1592,9 @@ def cargar_casos() -> list[dict[str, Any]]:
 
 
 def seleccionar_casos(casos: list[dict[str, Any]], solo: str | None, sin_audio: bool) -> list[dict[str, Any]]:
-    prefijos = {"TXT": "TXT-", "AUD": "AUD-", "BIB": "BIB-", "MAPA": "MAPA-"}
+    prefijos = {
+        "TXT": "TXT-", "AUD": "AUD-", "BIB": "BIB-", "MAPA": "MAPA-", "INV": "INV-", "SALAS": "SALA-"
+    }
     seleccionados = casos
     if solo:
         prefijo = prefijos[solo]
@@ -1314,7 +1606,7 @@ def seleccionar_casos(casos: list[dict[str, Any]], solo: str | None, sin_audio: 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Evalúa el agente de biblioteca.")
-    parser.add_argument("--solo", choices=("TXT", "AUD", "BIB", "MAPA"))
+    parser.add_argument("--solo", choices=("TXT", "AUD", "BIB", "MAPA", "INV", "SALAS"))
     parser.add_argument("--sin-audio", action="store_true")
     argumentos = parser.parse_args()
     casos = seleccionar_casos(cargar_casos(), argumentos.solo, argumentos.sin_audio)
@@ -1328,6 +1620,7 @@ def main() -> int:
     cambios_revertidos = 0
     try:
         guardado = capturar_base()
+        refrescar_demo()
         estado_autenticacion = capturar_estado_autenticacion()
         ids_sesiones_iniciales = capturar_ids_sesiones()
         casos_audio = [caso for caso in casos if caso.get("tipo") == "audio"]
@@ -1357,6 +1650,11 @@ def main() -> int:
                 else:
                     if caso.get("tipo") == "audio":
                         evaluar_caso_audio(caso, registro, cliente)
+                    elif (
+                        caso.get("id", "").startswith("INV-")
+                        or caso.get("tipo") == "investigacion"
+                    ):
+                        evaluar_caso_investigacion(caso, registro)
                     elif caso.get("id", "").startswith("MAPA-"):
                         evaluar_caso_mapa(caso, registro)
                     elif caso.get("categoria") == "login":

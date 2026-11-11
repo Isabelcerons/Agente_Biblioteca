@@ -243,13 +243,25 @@ body:has(.pantalla-sesion:not([hidden])) {
   position: sticky;
   top: 0;
   display: flex;
+  box-sizing: border-box;
   height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   flex-direction: column;
-  gap: var(--espacio-6);
-  overflow: auto;
-  padding: 24px 18px;
+  gap: 12px;
+  overflow: hidden;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  padding: 20px 16px;
   border-right: 1px solid var(--borde);
   background: color-mix(in srgb, var(--superficie) 88%, transparent);
+}
+
+.barra-lateral button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
 }
 
 .marca {
@@ -283,10 +295,22 @@ body:has(.pantalla-sesion:not([hidden])) {
 }
 
 .nueva-conversacion {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  padding-inline: 8px;
+  font-size: .88rem;
   width: 100%;
 }
 
 .borrar-chat {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  padding-inline: 8px;
+  font-size: .88rem;
   width: 100%;
   margin-top: 6px;
 }
@@ -299,15 +323,16 @@ body:has(.pantalla-sesion:not([hidden])) {
 
 .navegacion a,
 .navegacion-movil a {
-  display: flex;
+  display: inline-flex;
   min-width: 44px;
-  min-height: 46px;
+  min-height: 42px;
   align-items: center;
-  gap: 12px;
-  padding: 9px 12px;
+  gap: 8px;
+  padding: 7px 8px;
   border-radius: var(--radio);
   color: var(--texto);
   text-decoration: none;
+  white-space: nowrap;
   transition: background-color var(--dur-rapida) var(--ease);
 }
 
@@ -331,12 +356,22 @@ body:has(.pantalla-sesion:not([hidden])) {
   flex: 0 0 auto;
 }
 
+.barra-lateral > .navegacion {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+}
+
 .servicios-panel {
   margin-top: auto;
+  flex: 0 0 auto;
 }
 
 .servicios-panel h2 {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   font-family: Inter, sans-serif;
   font-size: .88rem;
 }
@@ -344,13 +379,14 @@ body:has(.pantalla-sesion:not([hidden])) {
 .servicios-lista {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 9px 4px;
+  gap: 8px 4px;
   font-size: .8rem;
 }
 
 .preferencias {
   display: grid;
   gap: 8px;
+  flex: 0 0 auto;
 }
 
 .preferencia-voz {
@@ -362,8 +398,9 @@ body:has(.pantalla-sesion:not([hidden])) {
 
 .selector-voz {
   width: 100%;
-  min-height: 40px;
+  height: 40px;
   padding: 6px 9px;
+  box-sizing: border-box;
   border: 1px solid var(--borde);
   border-radius: 10px;
   background: var(--superficie);
@@ -372,9 +409,12 @@ body:has(.pantalla-sesion:not([hidden])) {
 }
 
 .preferencia-prueba {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   min-height: 36px;
   justify-content: center;
-  padding: 5px 8px;
+  padding: 5px 6px;
   font-size: .8rem;
 }
 
@@ -396,10 +436,14 @@ body:has(.pantalla-sesion:not([hidden])) {
 }
 
 .preferencia-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   justify-content: flex-start;
   padding-inline: 10px;
   font-size: .84rem;
   text-align: left;
+  white-space: nowrap;
 }
 
 .preferencia-btn[aria-pressed="true"] {
@@ -1073,6 +1117,9 @@ button svg,
   }
 
   .nueva-conversacion {
+  white-space: nowrap;
+  padding-inline: 12px;
+  font-size: .92rem;
     width: 48px;
     min-width: 48px;
     overflow: hidden;
@@ -1279,6 +1326,9 @@ button svg,
   }
 
   .menu-movil__hoja .nueva-conversacion {
+  white-space: nowrap;
+  padding-inline: 12px;
+  font-size: .92rem;
     width: 100%;
     justify-content: flex-start;
     overflow: visible;
@@ -1419,7 +1469,7 @@ button svg,
     bottom: 0;
     left: 0;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0;
     padding: 4px 3px max(4px, env(safe-area-inset-bottom));
     border-top: 1px solid var(--borde);
@@ -1427,6 +1477,9 @@ button svg,
   }
 
   .navegacion-movil a {
+    min-width: 0;
+    white-space: nowrap;
+    text-align: center;
     min-height: 52px;
     flex-direction: column;
     justify-content: center;

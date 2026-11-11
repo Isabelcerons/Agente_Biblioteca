@@ -390,17 +390,24 @@ def registrar_tesis(
             )
             if cursor.fetchone():
                 raise CargaEnCursoError("Ya tiene una tesis procesándose.")
+            from app.salas import sala_de_programa
+            sala_info = sala_de_programa(programa)
+            sala_id = (
+                sala_info.get("id")
+                if isinstance(sala_info, dict)
+                else (sala_info if isinstance(sala_info, int) else None)
+            )
             cursor.execute(
                 """
                 INSERT INTO public.material
                     (titulo, autor, anio, tipo, tema, programa, editorial,
-                     descripcion_corta, es_demo, subido_por, subido_en)
+                     descripcion_corta, es_demo, subido_por, subido_en, sala_id)
                 VALUES (%s, %s, %s, 'tesis', %s, %s,
                         'Institución Universitaria del Putumayo (repositorio)',
-                        %s, false, %s, now())
+                        %s, false, %s, now(), %s)
                 RETURNING id
                 """,
-                (titulo, autor, anio, programa, programa, "", usuario_id),
+                (titulo, autor, anio, programa, programa, "", usuario_id, sala_id),
             )
             material_id = int(cursor.fetchone()[0])
             cursor.execute(

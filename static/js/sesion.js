@@ -38,6 +38,18 @@ export function montarSesion({ alEntrar, alInvitado, alExpirar }) {
     campo.focus();
   }
 
+  // Micro-animación de sacudida (shake) al ingresar credenciales o PIN erróneo
+  function animarFalloTarjeta() {
+    const tarjeta = pantalla.querySelector(".tarjeta-sesion");
+    if (!tarjeta) return;
+    tarjeta.classList.remove("tarjeta-sesion--shake");
+    void tarjeta.offsetWidth;
+    tarjeta.classList.add("tarjeta-sesion--shake");
+    tarjeta.addEventListener("animationend", () => {
+      tarjeta.classList.remove("tarjeta-sesion--shake");
+    }, { once: true });
+  }
+
   function limpiarTemporizadorBloqueo() {
     if (temporizadorBloqueo) window.clearInterval(temporizadorBloqueo);
     temporizadorBloqueo = 0;
@@ -73,7 +85,8 @@ export function montarSesion({ alEntrar, alInvitado, alExpirar }) {
     botonEntrar.disabled = false;
     botonEntrar.textContent = "Entrar";
     pantalla.hidden = false;
-    pantalla.classList.remove("pantalla-sesion--salida");
+    pantalla.classList.remove("pantalla-sesion--salida", "pantalla-sesion--cargando");
+    pantalla.querySelector(".tarjeta-sesion")?.classList.remove("tarjeta-sesion--shake");
     aplicacion.hidden = true;
     limpiarErrores();
     mostrarAviso(mensaje);
@@ -86,6 +99,7 @@ export function montarSesion({ alEntrar, alInvitado, alExpirar }) {
 
   function finalizarEntrada(callback) {
     entradaResuelta = true;
+    pantalla.classList.remove("pantalla-sesion--cargando");
     callback?.();
     aplicacion.hidden = false;
     const reducido = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -95,7 +109,7 @@ export function montarSesion({ alEntrar, alInvitado, alExpirar }) {
       pantalla.classList.remove("pantalla-sesion--salida");
       temporizadorSalida = 0;
       document.querySelector("#entrada-chat")?.focus({ preventScroll: true });
-    }, reducido ? 0 : 240);
+    }, reducido ? 0 : 340);
   }
 
   function guardarInvitado(valor) {
@@ -131,6 +145,7 @@ export function montarSesion({ alEntrar, alInvitado, alExpirar }) {
         resultado.mensaje_bienvenida,
         resultado.avisos || {}, // objeto {vencidos, multas, por_vencer, reservas_por_expirar}
         pendiente,
+        false,
       ));
       return;
     }
@@ -139,6 +154,7 @@ export function montarSesion({ alEntrar, alInvitado, alExpirar }) {
       const mensaje = resultado.mensaje || "El código o PIN no es correcto.";
       mostrarAviso(`${mensaje}${Number.isFinite(intentos) && !mensaje.includes("Te quedan") ? ` Te quedan ${intentos} intentos.` : ""}`);
       errorCampo(campoPin, "Verifica tu PIN e inténtalo de nuevo.", errorPin);
+      animarFalloTarjeta();
       return;
     }
     if (status === 429) {
@@ -187,6 +203,7 @@ export function montarSesion({ alEntrar, alInvitado, alExpirar }) {
     if (!/^\d{4}$/.test(campoPin.value)) {
       campoPin.value = "";
       errorCampo(campoPin, "Ingresa un PIN de 4 dígitos.", errorPin);
+      animarFalloTarjeta();
       return;
     }
     const codigo = campoCodigo.value;
@@ -195,6 +212,7 @@ export function montarSesion({ alEntrar, alInvitado, alExpirar }) {
     solicitudActiva = true;
     botonEntrar.disabled = true;
     botonEntrar.textContent = "Entrando…";
+    pantalla.classList.add("pantalla-sesion--cargando");
     try {
       atenderResultado(await iniciarSesion(codigo, pin));
     } catch {
@@ -202,6 +220,7 @@ export function montarSesion({ alEntrar, alInvitado, alExpirar }) {
       campoCodigo.focus();
     } finally {
       solicitudActiva = false;
+      pantalla.classList.remove("pantalla-sesion--cargando");
       if (!temporizadorBloqueo && !pantalla.hidden && botonEntrar.textContent === "Entrando…") {
         botonEntrar.disabled = false;
         botonEntrar.textContent = "Entrar";
@@ -224,6 +243,7 @@ export function montarSesion({ alEntrar, alInvitado, alExpirar }) {
           saludo,
           respuesta.avisos || {},
           "",
+          true,
         ));
         return;
       }

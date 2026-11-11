@@ -22,48 +22,132 @@
   <link rel="stylesheet" href="/static/css/variables.css">
   <link rel="stylesheet" href="/static/css/base.css">
   <link rel="stylesheet" href="/static/css/componentes.css">
+  <link rel="stylesheet" href="/static/css/salas.css">
   <link rel="stylesheet" href="/static/css/app.css">
   <link rel="stylesheet" href="/static/css/investigacion.css">
+  <link rel="stylesheet" href="/static/css/dinamico.css">
+  <link rel="stylesheet" href="/static/css/login.css">
+  <link rel="stylesheet" href="/static/css/escena.css">
   <script type="module" src="/static/js/app.js"></script>
 </head>
 <body>
   <section class="pantalla-sesion" id="pantalla-sesion" aria-labelledby="titulo-sesion">
-    <div class="tarjeta tarjeta-sesion">
-      <header class="marca-sesion">
-        <span class="marca-sesion__icono" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 7v14"/><path d="M3 5.5A2.5 2.5 0 0 1 5.5 3H12v16H5.5A2.5 2.5 0 0 0 3 21.5z"/><path d="M21 5.5A2.5 2.5 0 0 0 18.5 3H12v16h6.5a2.5 2.5 0 0 1 2.5 2.5z"/>
-          </svg>
-        </span>
-        <span class="marca-sesion__texto">
-          <strong>Biblioteca UniPutumayo</strong>
-          <small>Institución Universitaria del Putumayo</small>
-        </span>
-      </header>
-      <h1 id="titulo-sesion">Inicia sesión</h1>
-      <p class="texto-sec">Ingresa tus datos institucionales para continuar.</p>
-      <div class="aviso aviso--error sesion-aviso" id="sesion-aviso" role="alert" aria-live="assertive" hidden></div>
-      <form id="formulario-sesion" novalidate>
-        <label class="campo" for="codigo-sesion">Código de usuario
-          <input id="codigo-sesion" name="codigo" type="text" inputmode="numeric" autocomplete="username"
-            maxlength="10" pattern="[0-9]{3,10}" placeholder="Ej.: 101" required aria-describedby="error-codigo-sesion">
-          <small class="campo-error" id="error-codigo-sesion"></small>
-        </label>
-        <label class="campo" for="pin-sesion">PIN
-          <span class="campo-pin">
-            <input id="pin-sesion" name="pin" type="password" inputmode="numeric" maxlength="4"
-              autocomplete="current-password" pattern="[0-9]{4}" required aria-describedby="error-pin-sesion">
-            <button class="btn btn--fantasma boton-mostrar-pin" id="mostrar-pin" type="button"
-              aria-label="Mostrar PIN" aria-pressed="false">Mostrar</button>
+    <div class="login-escenario">
+      <!-- Escena visual decorativa de biblioteca con orbe inteligente y estantería animada -->
+      <div class="escena-biblioteca" aria-hidden="true">
+        <div class="escena-agente">
+          <div class="orbe-halo">
+            <span class="orbe-login" id="orbe-login"></span>
+          </div>
+          <div class="escena-agente__bocadillo">
+            <span class="escena-agente__saludo">Hola, soy el agente de la biblioteca.</span>
+            <span class="escena-agente__pregunta">¿Entramos?</span>
+          </div>
+        </div>
+
+        <div class="polvo-dorado">
+          <span class="particula p1"></span>
+          <span class="particula p2"></span>
+          <span class="particula p3"></span>
+          <span class="particula p4"></span>
+          <span class="particula p5"></span>
+          <span class="particula p6"></span>
+        </div>
+
+        <div class="estanteria-escena">
+          <div class="estanteria-libros">
+            <div class="lomo-libro lomo--respirando-1" style="--h: 205px; --w: 36px; --color-lomo: #1F4D3A; --color-acento: #C9A227;">
+              <span class="lomo-filete"></span>
+              <span class="lomo-texto">PUTUMAYO</span>
+              <span class="lomo-filete"></span>
+            </div>
+            <div class="lomo-libro lomo--respirando-2" style="--h: 228px; --w: 38px; --color-lomo: #8B5E3C; --color-acento: #F6F1E7;">
+              <span class="lomo-etiqueta">004</span>
+              <span class="lomo-texto">SISTEMAS</span>
+              <span class="lomo-filete"></span>
+            </div>
+            <div class="lomo-libro" style="--h: 195px; --w: 34px; --color-lomo: #9A3B2F; --color-acento: #C9A227;">
+              <span class="lomo-filete"></span>
+              <span class="lomo-texto">ALGORITMOS</span>
+              <span class="lomo-marcador"></span>
+            </div>
+            <div class="lomo-libro lomo--respirando-3" style="--h: 236px; --w: 40px; --color-lomo: #1B3526; --color-acento: #E3EDE6;">
+              <span class="lomo-filete"></span>
+              <span class="lomo-texto">AMAZONÍA</span>
+              <span class="lomo-filete"></span>
+            </div>
+            <div class="lomo-libro lomo--respirando-1" style="--h: 212px; --w: 35px; --color-lomo: #C9A227; --color-acento: #2A2A28;">
+              <span class="lomo-etiqueta">APA 7</span>
+              <span class="lomo-texto">INVESTIGAR</span>
+            </div>
+            <div class="lomo-libro" style="--h: 222px; --w: 37px; --color-lomo: #264837; --color-acento: #C9A227;">
+              <span class="lomo-filete"></span>
+              <span class="lomo-texto">CÁLCULO</span>
+              <span class="lomo-marcador"></span>
+            </div>
+            <div class="lomo-libro lomo--respirando-2" style="--h: 232px; --w: 36px; --color-lomo: #7D2D24; --color-acento: #F6F1E7;">
+              <span class="lomo-filete"></span>
+              <span class="lomo-texto">DERECHO</span>
+              <span class="lomo-filete"></span>
+            </div>
+            <div class="lomo-libro lomo--respirando-3" style="--h: 218px; --w: 38px; --color-lomo: #1F4D3A; --color-acento: #C9A227;">
+              <span class="lomo-etiqueta">TESIS</span>
+              <span class="lomo-texto">CATÁLOGO</span>
+            </div>
+          </div>
+          <div class="estante-madera">
+            <span class="estante-brillo"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tarjeta interactiva de inicio de sesión -->
+      <div class="tarjeta tarjeta-sesion">
+        <header class="marca-sesion">
+          <span class="marca-sesion__icono" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 7v14"/><path d="M3 5.5A2.5 2.5 0 0 1 5.5 3H12v16H5.5A2.5 2.5 0 0 0 3 21.5z"/><path d="M21 5.5A2.5 2.5 0 0 0 18.5 3H12v16h6.5a2.5 2.5 0 0 1 2.5 2.5z"/>
+            </svg>
           </span>
-          <small class="campo-error" id="error-pin-sesion"></small>
-        </label>
-        <button class="btn btn--primario boton-entrar" id="entrar-sesion" type="submit">Entrar</button>
-      </form>
-      <div class="separador-sesion" aria-hidden="true"><span>o</span></div>
-      <button class="btn btn--fantasma boton-invitado" id="entrar-invitado" type="button">Entrar como invitado</button>
-      <p class="nota-invitado">Podrás buscar libros y preguntar por el reglamento; para reservar o renovar deberás iniciar sesión.</p>
-      <p class="nota-demo">Usuarios de demostración: códigos 101 a 108 · PIN 1234</p>
+          <span class="marca-sesion__texto">
+            <strong>Biblioteca UniPutumayo</strong>
+            <small>Institución Universitaria del Putumayo</small>
+          </span>
+        </header>
+        <h1 id="titulo-sesion">Inicia sesión</h1>
+        <p class="texto-sec">Ingresa tus datos institucionales para continuar.</p>
+        <div class="aviso aviso--error sesion-aviso" id="sesion-aviso" role="alert" aria-live="assertive" hidden></div>
+        <form id="formulario-sesion" novalidate>
+          <label class="campo campo-dinamico" for="codigo-sesion">Código de usuario
+            <div class="campo-envoltura">
+              <input id="codigo-sesion" name="codigo" type="text" inputmode="numeric" autocomplete="username"
+                maxlength="10" pattern="[0-9]{3,10}" placeholder="Ej.: 101" required aria-describedby="error-codigo-sesion">
+              <span class="subrayado-laton" aria-hidden="true"></span>
+            </div>
+            <small class="campo-error" id="error-codigo-sesion"></small>
+          </label>
+          <label class="campo campo-dinamico" for="pin-sesion">PIN
+            <span class="campo-pin">
+              <div class="campo-envoltura">
+                <input id="pin-sesion" name="pin" type="password" inputmode="numeric" maxlength="4"
+                  autocomplete="current-password" pattern="[0-9]{4}" required aria-describedby="error-pin-sesion">
+                <span class="subrayado-laton" aria-hidden="true"></span>
+              </div>
+              <button class="btn btn--fantasma boton-mostrar-pin" id="mostrar-pin" type="button"
+                aria-label="Mostrar PIN" aria-pressed="false">Mostrar</button>
+            </span>
+            <small class="campo-error" id="error-pin-sesion"></small>
+          </label>
+          <button class="btn btn--primario boton-entrar" id="entrar-sesion" type="submit">
+            <span>Entrar</span>
+            <span class="boton-entrar__brillo" aria-hidden="true"></span>
+          </button>
+        </form>
+        <div class="separador-sesion" aria-hidden="true"><span>o</span></div>
+        <button class="btn btn--fantasma boton-invitado" id="entrar-invitado" type="button">Entrar como invitado</button>
+        <p class="nota-invitado">Podrás buscar libros y preguntar por el reglamento; para reservar o renovar deberás iniciar sesión.</p>
+        <p class="nota-demo">Usuarios de demostración: códigos 101 a 108 · PIN 1234</p>
+      </div>
     </div>
   </section>
   <div class="app-shell" hidden>

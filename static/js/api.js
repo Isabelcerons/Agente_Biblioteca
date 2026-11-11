@@ -1,3 +1,5 @@
+import { leerSalaPreferida } from "./salas.js";
+
 async function solicitar(ruta, opciones = {}, aceptarError = false) {
   let respuesta;
   try {
@@ -21,7 +23,13 @@ async function solicitar(ruta, opciones = {}, aceptarError = false) {
   return datos;
 }
 
-function preferenciaDeVoz() {
+function obtenerSalaActualParaAPI(sala = null) {
+  if (sala !== null && sala !== undefined && sala !== "") return sala;
+  const preferida = leerSalaPreferida();
+  return preferida && preferida !== "todas" ? preferida : null;
+}
+
+export function obtenerPreferenciaVoz() {
   try {
     return {
       voz_id: localStorage.getItem("biblioteca-voz-agente") || "claude",
@@ -32,7 +40,7 @@ function preferenciaDeVoz() {
   }
 }
 
-export function enviarChat(texto, conversacionId, conAudio = false) {
+export function enviarChat(texto, conversacionId, conAudio = false, sala = null) {
   return solicitar("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -40,23 +48,40 @@ export function enviarChat(texto, conversacionId, conAudio = false) {
       texto,
       conversacion_id: conversacionId || null,
       con_audio: conAudio,
-      ...preferenciaDeVoz(),
+      sala: obtenerSalaActualParaAPI(sala),
+      ...obtenerPreferenciaVoz(),
     }),
   });
 }
 
-export function enviarVoz(blob, conversacionId) {
+export function enviarVoz(blob, conversacionId, sala = null) {
   const formulario = new FormData();
-  const voz = preferenciaDeVoz();
+  const voz = obtenerPreferenciaVoz();
+  const salaActual = obtenerSalaActualParaAPI(sala);
   formulario.append("audio", blob, "consulta.wav");
   if (conversacionId) formulario.append("conversacion_id", conversacionId);
+  if (salaActual) formulario.append("sala", salaActual);
+  else formulario.append("sala", "");
   formulario.append("voz_id", voz.voz_id);
   formulario.append("acepto_cpml", String(voz.acepto_cpml));
   return solicitar("/api/voz", { method: "POST", body: formulario }, true);
 }
 
+export async function obtenerBienvenidaSalas(conversacionId = null) {
+  const url = new URL("/api/salas/bienvenida", window.location.origin);
+  if (conversacionId) url.searchParams.set("conversacion_id", conversacionId);
+  try {
+    return await solicitar(url.toString(), {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    }, true);
+  } catch {
+    return null;
+  }
+}
+
 export function sintetizar(texto) {
-  const voz = preferenciaDeVoz();
+  const voz = obtenerPreferenciaVoz();
   return solicitar("/api/tts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -66,6 +91,10 @@ export function sintetizar(texto) {
 
 export function obtenerVoces() {
   return solicitar("/api/voces");
+}
+
+export function prepararVoz(vozId) {
+  return solicitar(`/api/voces/${encodeURIComponent(vozId)}/preparar`, { method: "POST" });
 }
 
 export function obtenerSalud() {
@@ -82,6 +111,12 @@ export function obtenerMisReservas() {
 
 export function obtenerConversacionActual() {
   return solicitar("/api/conversacion/actual");
+}
+
+export function adoptarConversacion(conversacionId) {
+  return solicitar(`/api/conversacion/${encodeURIComponent(conversacionId)}/adoptar`, {
+    method: "POST",
+  });
 }
 
 export function borrarConversacion(conversacionId) {

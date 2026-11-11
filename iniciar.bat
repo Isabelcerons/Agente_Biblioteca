@@ -9,6 +9,7 @@ if not exist "venv\Scripts\activate.bat" (
 )
 
 call "venv\Scripts\activate.bat"
+REM python refrescar_demo.py  (opcional: deja la demo lista con fechas de hoy)
 python -c "from dotenv import load_dotenv; import os,urllib.request; load_dotenv(); urllib.request.urlopen(os.getenv('OLLAMA_HOST','http://localhost:11434').rstrip('/')+'/api/tags',timeout=3)" >nul 2>nul
 if errorlevel 1 (
     echo AVISO: Ollama no responde. Inicie Ollama para habilitar las respuestas del modelo.

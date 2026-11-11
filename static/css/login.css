@@ -1,0 +1,628 @@
+/* ==========================================================================
+   Biblioteca UniPutumayo — Pantalla de Inicio de Sesión Dinámica
+   Estilo visual: estantería viva, orbe dorado del agente, latón y verde biblioteca
+   ========================================================================== */
+
+/* 1. Contenedor principal de la pantalla de sesión */
+.pantalla-sesion {
+  background-color: var(--fondo);
+  background-image:
+    radial-gradient(ellipse at 15% 15%, rgb(201 162 39 / 12%), transparent 42%),
+    radial-gradient(ellipse at 85% 85%, rgb(31 77 58 / 10%), transparent 48%),
+    radial-gradient(ellipse at 50% 10%, rgb(139 94 60 / 8%), transparent 35%);
+  transition: opacity 0.36s var(--ease), transform 0.36s var(--ease);
+}
+
+[data-tema="oscuro"] .pantalla-sesion {
+  background-color: var(--fondo);
+  background-image:
+    radial-gradient(ellipse at 20% 15%, rgb(201 162 39 / 14%), transparent 44%),
+    radial-gradient(ellipse at 80% 80%, rgb(41 68 56 / 22%), transparent 52%),
+    radial-gradient(ellipse at 50% 0%, rgb(201 162 39 / 8%), transparent 40%);
+}
+
+/* Transición de salida suave (la estantería y la tarjeta se desvanecen) */
+.pantalla-sesion--salida {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-6px);
+}
+
+.pantalla-sesion--salida .escena-biblioteca {
+  opacity: 0;
+  transform: scale(0.96) translateY(-14px);
+  transition: opacity 0.32s var(--ease), transform 0.35s var(--ease);
+}
+
+.pantalla-sesion--salida .tarjeta-sesion {
+  opacity: 0;
+  transform: scale(0.96) translateY(12px);
+  transition: opacity 0.3s var(--ease), transform 0.35s var(--ease);
+}
+
+/* 2. Escenario dividido en dos partes (escritorio >= 900px) */
+.login-escenario {
+  display: grid;
+  grid-template-columns: minmax(340px, 460px) minmax(320px, 440px);
+  align-items: center;
+  justify-content: center;
+  gap: clamp(24px, 4vw, 52px);
+  width: 100%;
+  max-width: 980px;
+  margin: auto;
+  box-sizing: border-box;
+}
+
+/* 3. Escena animada de biblioteca (columna izquierda) */
+.escena-biblioteca {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 24px 20px;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 50% 25%, rgb(201 162 39 / 10%), transparent 60%),
+    color-mix(in srgb, var(--superficie) 40%, transparent);
+  border: 1px solid color-mix(in srgb, var(--borde) 60%, transparent);
+  box-shadow: 0 12px 32px rgb(83 55 31 / 6%);
+  user-select: none;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+[data-tema="oscuro"] .escena-biblioteca {
+  /* Efecto "biblioteca de noche": luz cálida tenue enfocando la estantería */
+  background:
+    radial-gradient(ellipse at 50% -10%, rgb(201 162 39 / 22%), transparent 70%),
+    radial-gradient(circle at 50% 60%, rgb(31 77 58 / 18%), transparent 65%),
+    color-mix(in srgb, var(--superficie) 75%, transparent);
+  border-color: color-mix(in srgb, var(--borde) 45%, var(--laton));
+  box-shadow: 0 16px 40px rgb(0 0 0 / 45%), 0 0 1px 1px rgb(201 162 39 / 18%);
+}
+
+/* Saludo y orbe del agente */
+.escena-agente {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 380px;
+}
+
+.orbe-halo {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 68px;
+  height: 68px;
+}
+
+.orbe-halo::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(201 162 39 / 35%), transparent 70%);
+  animation: pulso-halo 3.6s ease-in-out infinite;
+}
+
+.orbe-login {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 28%, #fff4be 0%, #e2b43b 45%, #c9a227 68%, #784c1f 100%);
+  box-shadow:
+    0 0 18px rgb(201 162 39 / 55%),
+    0 0 36px rgb(201 162 39 / 22%),
+    inset 0 -2px 6px rgb(60 30 10 / 45%),
+    inset 0 2px 4px rgb(255 255 255 / 60%);
+  animation: pulso-orbe 4s ease-in-out infinite;
+  transform-origin: center center;
+}
+
+/* Estado del orbe mientras se autentica ("Entrando…") */
+.pantalla-sesion--cargando .orbe-login {
+  animation: girar-orbe 1s linear infinite, resplandor-orbe 0.6s alternate infinite ease-in-out;
+  box-shadow:
+    0 0 28px var(--laton),
+    0 0 55px rgb(201 162 39 / 75%),
+    inset 0 -2px 6px rgb(60 30 10 / 45%);
+}
+
+@keyframes pulso-orbe {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 18px rgb(201 162 39 / 55%), 0 0 36px rgb(201 162 39 / 22%);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 0 26px rgb(201 162 39 / 75%), 0 0 48px rgb(201 162 39 / 35%);
+  }
+}
+
+@keyframes pulso-halo {
+  0%, 100% { transform: scale(0.92); opacity: 0.45; }
+  50% { transform: scale(1.22); opacity: 0.85; }
+}
+
+@keyframes girar-orbe {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes resplandor-orbe {
+  from { filter: brightness(1); }
+  to { filter: brightness(1.35); }
+}
+
+/* Bocadillo de saludo del agente */
+.escena-agente__bocadillo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  box-shadow: var(--sombra);
+  position: relative;
+}
+
+.escena-agente__bocadillo::before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+  width: 12px;
+  height: 12px;
+  background: var(--superficie);
+  border-left: 1px solid var(--borde);
+  border-bottom: 1px solid var(--borde);
+}
+
+.escena-agente__saludo {
+  font-size: 0.84rem;
+  color: var(--texto-sec);
+  line-height: 1.25;
+}
+
+.escena-agente__pregunta {
+  font-family: Fraunces, Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--texto);
+}
+
+/* Partículas o polvo dorado sutil */
+.polvo-dorado {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.particula {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--laton);
+  box-shadow: 0 0 6px var(--laton);
+  opacity: 0.55;
+  animation: flotar-polvo 7s infinite ease-in-out;
+}
+
+.particula.p1 { left: 18%; bottom: 25%; animation-duration: 6.2s; animation-delay: 0s; }
+.particula.p2 { left: 42%; bottom: 35%; animation-duration: 8.5s; animation-delay: 1.5s; width: 4px; height: 4px; }
+.particula.p3 { left: 68%; bottom: 20%; animation-duration: 7.1s; animation-delay: 2.8s; }
+.particula.p4 { left: 82%; bottom: 45%; animation-duration: 9.2s; animation-delay: 0.7s; }
+.particula.p5 { left: 30%; bottom: 65%; animation-duration: 8.0s; animation-delay: 3.2s; width: 2.5px; height: 2.5px; }
+.particula.p6 { left: 75%; bottom: 70%; animation-duration: 6.8s; animation-delay: 4.1s; }
+
+@keyframes flotar-polvo {
+  0% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.65;
+  }
+  75% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: translateY(-55px) translateX(12px);
+    opacity: 0;
+  }
+}
+
+/* Estantería de lomos de libros */
+.estanteria-escena {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 400px;
+  margin-top: 6px;
+}
+
+.estanteria-libros {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 5px;
+  height: 220px;
+  padding-inline: 8px;
+}
+
+.lomo-libro {
+  position: relative;
+  height: var(--h, 190px);
+  width: var(--w, 36px);
+  flex-shrink: 0;
+  border-radius: 4px 4px 0 0;
+  background:
+    linear-gradient(90deg,
+      rgba(0, 0, 0, 0.42) 0%,
+      rgba(255, 255, 255, 0.22) 16%,
+      rgba(0, 0, 0, 0.05) 82%,
+      rgba(0, 0, 0, 0.48) 100%
+    ),
+    var(--color-lomo, var(--verde));
+  box-shadow: 2px 2px 7px rgb(0 0 0 / 22%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 3px 8px;
+  box-sizing: border-box;
+  transform-origin: bottom center;
+}
+
+/* Micro-animación de respiración / suave desplazamiento de los lomos */
+.lomo--respirando-1 {
+  animation: respirar-lomo 5s ease-in-out infinite;
+}
+
+.lomo--respirando-2 {
+  animation: respirar-lomo 6.2s ease-in-out infinite 1.4s;
+}
+
+.lomo--respirando-3 {
+  animation: respirar-lomo 5.6s ease-in-out infinite 2.8s;
+}
+
+@keyframes respirar-lomo {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* Detalles de los lomos: filetes dorados, etiquetas y tipografía */
+.lomo-filete {
+  width: 82%;
+  height: 2px;
+  background: var(--color-acento, var(--laton));
+  opacity: 0.85;
+  border-radius: 1px;
+}
+
+.lomo-etiqueta {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 4px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #222;
+  border-radius: 2px;
+  text-align: center;
+  margin-top: 2px;
+}
+
+.lomo-texto {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-family: Fraunces, Georgia, serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--color-acento, #fff);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+  max-height: 120px;
+}
+
+.lomo-marcador {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 8px;
+  height: 12px;
+  background: var(--laton);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 75%, 0 100%);
+  z-index: 2;
+}
+
+/* Balda de madera con moldura y reflejo de latón */
+.estante-madera {
+  position: relative;
+  height: 14px;
+  width: 100%;
+  border-radius: 2px 2px 5px 5px;
+  background: linear-gradient(180deg, #9C6B45 0%, #7D5233 42%, #4F321C 100%);
+  box-shadow: 0 10px 24px rgb(40 24 12 / 32%), 0 2px 4px rgb(0 0 0 / 25%);
+}
+
+[data-tema="oscuro"] .estante-madera {
+  background: linear-gradient(180deg, #66442A 0%, #4D321F 45%, #2B1A0F 100%);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 55%);
+}
+
+.estante-brillo {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgb(201 162 39 / 85%) 20%, rgb(240 215 130 / 95%) 50%, rgb(201 162 39 / 85%) 80%, transparent);
+}
+
+/* 4. Tarjeta de inicio de sesión (columna derecha) */
+.tarjeta-sesion {
+  width: min(100%, 460px);
+  padding: clamp(24px, 5vw, 36px);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 20px;
+  box-shadow:
+    0 16px 42px rgb(83 55 31 / 12%),
+    0 4px 12px rgb(83 55 31 / 5%);
+  transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease);
+  box-sizing: border-box;
+}
+
+[data-tema="oscuro"] .tarjeta-sesion {
+  box-shadow:
+    0 18px 46px rgb(0 0 0 / 52%),
+    0 0 1px 1px rgb(201 162 39 / 18%);
+}
+
+/* Animación de "shake" al fallar el PIN */
+@keyframes shake-tarjeta-sesion {
+  0%, 100% { transform: translateX(0); }
+  15%, 45%, 75% { transform: translateX(-7px); }
+  30%, 60%, 90% { transform: translateX(7px); }
+}
+
+.tarjeta-sesion--shake {
+  animation: shake-tarjeta-sesion 0.42s cubic-bezier(.36, .07, .19, .97) both;
+}
+
+/* Aviso de error con deslizamiento */
+.sesion-aviso:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: aviso-deslizar 0.28s var(--ease);
+}
+
+@keyframes aviso-deslizar {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 5. Campos dinámicos con micro-animación de subrayado de latón */
+.campo-dinamico {
+  display: grid;
+  gap: 6px;
+}
+
+.campo-envoltura,
+.campo-control {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+}
+
+.campo-envoltura input,
+.campo-control input {
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color var(--dur-rapida) var(--ease), box-shadow var(--dur-rapida) var(--ease);
+}
+
+.subrayado-laton {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  background: var(--laton);
+  border-radius: 2px;
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 0.26s var(--ease);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.campo-envoltura:focus-within .subrayado-laton,
+.campo-control:focus-within .subrayado-laton,
+.campo-dinamico:focus-within .subrayado-laton {
+  transform: scaleX(1);
+}
+
+.campo-dinamico:focus-within input {
+  border-color: var(--laton);
+}
+
+/* 6. Botón "Entrar" con brillo al pasar el mouse */
+.boton-entrar {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.18s var(--ease), box-shadow 0.18s var(--ease), background-color 0.18s var(--ease);
+}
+
+.boton-entrar:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgb(31 77 58 / 32%);
+}
+
+.boton-entrar:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.boton-entrar__brillo {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.32) 50%, transparent 100%);
+  transform: translateX(-100%);
+  transition: transform 0.55s ease;
+  pointer-events: none;
+}
+
+.boton-entrar:hover:not(:disabled) .boton-entrar__brillo {
+  transform: translateX(100%);
+}
+
+/* 7. Adaptabilidad en Celulares (< 900px) */
+@media (max-width: 899px) {
+  .login-escenario {
+    grid-template-columns: minmax(0, 100%);
+    max-width: 440px;
+    gap: 16px;
+    padding-block: 8px;
+  }
+
+  .escena-biblioteca {
+    padding: 14px 16px 12px;
+    gap: 12px;
+    max-width: 100%;
+  }
+
+  .escena-agente {
+    gap: 12px;
+    max-width: 100%;
+  }
+
+  .orbe-halo {
+    width: 48px;
+    height: 48px;
+  }
+
+  .orbe-login {
+    width: 38px;
+    height: 38px;
+  }
+
+  .escena-agente__bocadillo {
+    padding: 7px 12px;
+  }
+
+  .escena-agente__saludo {
+    font-size: 0.78rem;
+  }
+
+  .escena-agente__pregunta {
+    font-size: 0.95rem;
+  }
+
+  /* Estantería reducida arriba en móvil para no obligar a scroll excesivo */
+  .estanteria-escena {
+    margin-top: 0;
+    max-width: 100%;
+  }
+
+  .estanteria-libros {
+    height: 98px;
+    gap: 4px;
+    padding-inline: 4px;
+  }
+
+  .lomo-libro {
+    height: calc(var(--h) * 0.44);
+    width: 28px;
+    padding: 6px 2px 4px;
+  }
+
+  .lomo-texto {
+    font-size: 0.58rem;
+    max-height: 52px;
+  }
+
+  .lomo-etiqueta {
+    font-size: 0.52rem;
+    padding: 0 2px;
+  }
+
+  .estante-madera {
+    height: 10px;
+  }
+
+  .tarjeta-sesion {
+    padding: 20px 18px;
+    border-radius: 16px;
+  }
+
+  .marca-sesion {
+    margin-bottom: 20px;
+  }
+}
+
+/* 9. Accesibilidad: Respeta prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.15s !important;
+  }
+
+  .orbe-halo::before,
+  .orbe-login,
+  .particula,
+  .lomo--respirando-1,
+  .lomo--respirando-2,
+  .lomo--respirando-3,
+  .tarjeta-sesion--shake,
+  .sesion-aviso:not([hidden]),
+  .boton-entrar__brillo {
+    animation: none !important;
+    transform: none !important;
+  }
+
+  .pantalla-sesion--salida {
+    opacity: 0 !important;
+    transform: none !important;
+  }
+
+  .subrayado-laton {
+    transition: opacity 0.15s linear !important;
+    transform: none !important;
+    opacity: 0;
+  }
+
+  .campo-dinamico:focus-within .subrayado-laton {
+    opacity: 1;
+  }
+}

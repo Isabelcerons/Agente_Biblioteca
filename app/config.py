@@ -47,6 +47,10 @@ TOP_K = 5
 NUM_CTX = int(os.getenv("NUM_CTX", "2048"))
 # Tope de fichas generadas por el LLM al redactar (la decisión de herramienta usa menos).
 NUM_PREDICT = int(os.getenv("NUM_PREDICT", "200"))
+# Topes optimizados para velocidad en CPU (Misión Gemini-1)
+NUM_PREDICT_TOOL_CALLING = int(os.getenv("NUM_PREDICT_TOOL_CALLING", "64"))
+NUM_PREDICT_REDACCION = int(os.getenv("NUM_PREDICT_REDACCION", "120"))
+UMBRAL_RELEVANCIA_SALA = float(os.getenv("UMBRAL_RELEVANCIA_SALA", "0.35"))
 # Tiempo que Ollama mantiene los modelos en memoria entre consultas (evita recargarlos).
 KEEP_ALIVE = os.getenv("KEEP_ALIVE", "30m")
 # Hilos de CPU para faster-whisper: núcleos FÍSICOS (los lógicos con hyperthreading no ayudan).

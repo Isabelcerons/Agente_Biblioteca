@@ -6,6 +6,7 @@ const COLORES_CATEGORIA = {
     administracion: "#8B5E3C",
     contaduria: "#7A4E9C",
     transversal: "#A07A00",
+    otros: "#5F6B73",
   },
   oscuro: {
     sistemas: "#F08A7C",
@@ -14,6 +15,7 @@ const COLORES_CATEGORIA = {
     administracion: "#D9A577",
     contaduria: "#C29BE8",
     transversal: "#E8C14A",
+    otros: "#A9B4BC",
   },
 };
 
@@ -22,12 +24,45 @@ const COLORES_TIPO = {
   oscuro: ["#78B8D5", "#D989AF", "#B2C875", "#A3A0E0", "#E0A078", "#82C5B5"],
 };
 
+export const PALETA_PROGRAMAS = COLORES_CATEGORIA;
+
+export function normalizarPrograma(nombre) {
+  return String(nombre || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+export function clavePrograma(nombre) {
+  const norm = normalizarPrograma(nombre);
+  if (!norm) return "otros";
+  if (norm.includes("sistema")) return "sistemas";
+  if (norm.includes("agroforest")) return "agroforestal";
+  if (norm.includes("ambiental")) return "ambiental";
+  if (norm.includes("administra")) return "administracion";
+  if (norm.includes("contadur")) return "contaduria";
+  if (norm.includes("transversal")) return "transversal";
+  return "otros";
+}
+
+export function colorPorPrograma(nombre, tema = "claro") {
+  const clave = clavePrograma(nombre);
+  const colores = PALETA_PROGRAMAS[tema] || PALETA_PROGRAMAS.claro;
+  return colores[clave] || colores.otros;
+}
+
 const CATEGORIAS_CONOCIDAS = [
   ["ingenieria de sistemas", "sistemas"],
+  ["sistemas", "sistemas"],
   ["ingenieria agroforestal", "agroforestal"],
+  ["agroforestal", "agroforestal"],
   ["ingenieria ambiental", "ambiental"],
+  ["ambiental", "ambiental"],
   ["administracion de empresas", "administracion"],
+  ["administracion", "administracion"],
   ["contaduria publica", "contaduria"],
+  ["contaduria", "contaduria"],
   ["transversal", "transversal"],
 ];
 
@@ -203,17 +238,18 @@ export function montarMapa(contenedor, { alAbrirFicha, resaltar } = {}) {
 
   function colorCategoria(nombre) {
     const tema = document.documentElement.dataset.tema === "oscuro" ? "oscuro" : "claro";
-    const clave = nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es");
-    const conocida = CATEGORIAS_CONOCIDAS.find(([programa]) => clave.includes(programa));
-    if (conocida) return COLORES_CATEGORIA[tema][conocida[1]];
-    if (modo.value === "tipo") {
+    if (modo && modo.value === "tipo") {
+      const clave = normalizarPrograma(nombre);
+
+
+
       let hash = 2166136261;
       for (const caracter of clave) {
         hash = Math.imul(hash ^ caracter.charCodeAt(0), 16777619);
       }
       return COLORES_TIPO[tema][(hash >>> 0) % COLORES_TIPO[tema].length];
     }
-    return tema === "oscuro" ? "#A9B4BC" : "#5F6B73";
+    return colorPorPrograma(nombre, tema);
   }
 
   function categoria(punto) {

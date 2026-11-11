@@ -268,13 +268,18 @@ def referencia_apa_catalogo(fila: dict[str, Any]) -> str | None:
 
 
 def generar_bibliografia(
-    tema: str, cantidad: int = 5, norma: str = "APA"
+    tema: str, cantidad: int = 5, norma: str = "APA", sala_slug: str | None = None
 ) -> dict[str, Any]:
     """Busca materiales del acervo y construye una lista sin inventar metadatos."""
     inicio = perf_counter()
     tema = tema.strip()
     norma_solicitada = norma
     aviso = ""
+    sala_slug_norm = (
+        sala_slug.strip().lower()
+        if sala_slug and sala_slug.strip().lower() not in ("", "todas", "toda", "general", "null", "none")
+        else None
+    )
     if not isinstance(norma, str) or norma.strip().upper() not in {"APA", "IEEE"}:
         norma = "APA"
         aviso = f"La norma «{norma_solicitada}» no se reconoce; usé APA. "
@@ -286,6 +291,7 @@ def generar_bibliografia(
             "mensaje": "La cantidad debe ser un entero entre 1 y 15.",
             "datos": {"norma": norma, "tema": tema, "referencias": [], "omitidos": []},
             "tiempos": {"t_total_ms": round((perf_counter() - inicio) * 1000)},
+            "sugerencia_sala": None,
         }
     if not tema:
         return {
@@ -293,16 +299,56 @@ def generar_bibliografia(
             "mensaje": "Indique un tema para buscar referencias.",
             "datos": {"norma": norma, "tema": tema, "referencias": [], "omitidos": []},
             "tiempos": {"t_total_ms": round((perf_counter() - inicio) * 1000)},
+            "sugerencia_sala": None,
         }
 
     try:
-        resultados, tiempos_rag = rag.buscar_materiales_semantico(tema, k=cantidad)
+        umbral = 0.20 if sala_slug_norm else 0.30
+        resultados, tiempos_rag = rag.buscar_materiales_semantico(tema, k=cantidad, sala_slug=sala_slug_norm)
         candidatos = [
             material
             for material in resultados
-            if float(material.get("similitud") or 0) >= 0.30
+            if float(material.get("similitud") or 0) >= umbral
             and material.get("material_id") is not None
         ]
+        if not candidatos and sala_slug_norm:
+            globales, _ = rag.buscar_materiales_semantico(tema, k=cantidad, sala_slug=None)
+            validos_glob = [m for m in globales if float(m.get("similitud") or 0) >= 0.30]
+            if validos_glob:
+                ids_glob = [int(m["material_id"]) for m in validos_glob if m.get("material_id")]
+                with conexion() as conn, conn.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        SELECT s.slug, s.nombre, count(m.id) AS cantidad
+                        FROM public.material AS m
+                        JOIN public.salas AS s ON s.id = m.sala_id
+                        WHERE m.id = ANY(%s) AND lower(btrim(s.slug)) <> lower(btrim(%s))
+                        GROUP BY s.slug, s.nombre
+                        ORDER BY cantidad DESC
+                        LIMIT 1
+                        """,
+                        (ids_glob, sala_slug_norm),
+                    )
+                    fila = cursor.fetchone()
+                if fila:
+                    cant = int(fila[2])
+                    texto_res = "1 resultado" if cant == 1 else f"{cant} resultados"
+                    sug = {
+                        "slug": fila[0],
+                        "nombre": fila[1],
+                        "motivo": f"Hay {texto_res} en {fila[1]}.",
+                    }
+                    return {
+                        "ok": False,
+                        "mensaje": (
+                            f"En esta sala no tengo material sobre eso, pero en la {fila[1]} "
+                            f"hay {texto_res}. ¿Quieres que te lleve?"
+                        ),
+                        "datos": {"norma": norma, "tema": tema, "referencias": [], "omitidos": []},
+                        "tiempos": {**tiempos_rag, "t_total_ms": round((perf_counter() - inicio) * 1000)},
+                        "fuentes": [],
+                        "sugerencia_sala": sug,
+                    }
         ids = list(dict.fromkeys(int(material["material_id"]) for material in candidatos))
         filas_por_id: dict[int, dict[str, Any]] = {}
         t_consulta_ms = 0.0
@@ -403,8 +449,10 @@ def generar_bibliografia(
             "referencias": referencias,
             "omitidos": omitidos,
         }
+        cant_ref = len(referencias)
+        texto_ref = "1 referencia" if cant_ref == 1 else f"{cant_ref} referencias"
         mensaje = (
-            f"{aviso}Encontré {len(referencias)} referencias en formato {norma}."
+            f"{aviso}Encontré {texto_ref} en formato {norma}."
             if referencias
             else f"{aviso}No encontré material del acervo sobre ese tema para armar la bibliografía."
         )
@@ -414,6 +462,7 @@ def generar_bibliografia(
             "datos": datos,
             "tiempos": tiempos,
             "fuentes": fuentes,
+            "sugerencia_sala": None,
         }
     except Exception as error:
         return {
@@ -422,4 +471,5 @@ def generar_bibliografia(
             "datos": {"norma": norma, "tema": tema, "referencias": [], "omitidos": []},
             "tiempos": {"t_total_ms": round((perf_counter() - inicio) * 1000)},
             "fuentes": [],
+            "sugerencia_sala": None,
         }

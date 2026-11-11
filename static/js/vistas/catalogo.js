@@ -66,6 +66,7 @@ export function montarCatalogo(contenedor) {
     try {
       const datos = await obtenerMaterial(material.material_id);
       if (solicitud !== fichaGeneracion || !dialogo.open) return;
+      datos.material_id = datos.material_id ?? material.material_id;
       ficha.replaceChildren(crear("p", "texto-sec", [datos.autor, datos.anio, tipos[datos.tipo]].filter(Boolean).join(" · ")));
       ficha.append(crear("p", "", datos.programa || "Programa no indicado"));
       if (datos.tema) ficha.append(crear("p", "", `Tema: ${datos.tema}`));

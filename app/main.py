@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 import logging
 from pathlib import Path
 import re
+import threading
 from time import perf_counter
 from typing import Any
 from uuid import UUID
@@ -20,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 from starlette.concurrency import run_in_threadpool
 
-from app import agente, auth, herramientas, investigacion, mapa, rag, repositorio, stt, tts
+from app import agente, auth, herramientas, investigacion, mapa, rag, repositorio, salas, stt, tts
 from app.config import KEEP_ALIVE, LLM_MODEL, LLM_MODEL_REDACCION, NUM_CTX, OLLAMA_HOST
 from app.db import conexion
 from app.formatos import fecha_es
@@ -39,6 +40,7 @@ class SolicitudChat(BaseModel):
     con_audio: bool = False
     voz_id: str = "claude"
     acepto_cpml: bool = False
+    sala: str | None = None
 
 
 class SolicitudTTS(BaseModel):
@@ -59,6 +61,7 @@ class SolicitudLogin(BaseModel):
 class SolicitudInvestigacion(BaseModel):
     tema: str = Field(min_length=1, max_length=500, strict=True)
     programa: str | None = Field(default=None, min_length=1, max_length=160, strict=True)
+    sala: str | None = Field(default=None, max_length=60, strict=False)
 
     @field_validator("tema", "programa", mode="before")
     @classmethod
@@ -125,6 +128,8 @@ async def lifespan(_: FastAPI):
         print(f"[inicio] voz precalentada en {round((perf_counter() - inicio) * 1000)} ms.")
     except Exception as error:
         print(f"[inicio] No se pudo precalentar la voz: {error}")
+    hilo_precarga = threading.Thread(target=tts.preparar_voces_piper_en_segundo_plano, daemon=True)
+    hilo_precarga.start()
     yield
 
 
@@ -202,12 +207,84 @@ async def inicio() -> HTMLResponse:
 @app.post("/api/investigacion", response_model=None)
 async def asistir_investigacion(solicitud: SolicitudInvestigacion) -> dict[str, Any] | JSONResponse:
     try:
-        return await run_in_threadpool(investigacion.investigar, solicitud.tema, solicitud.programa)
+        return await run_in_threadpool(
+            investigacion.investigar,
+            solicitud.tema,
+            solicitud.programa,
+            sala_slug=solicitud.sala,
+        )
     except Exception:
         _LOGGER.exception("No fue posible consultar la evidencia de investigación.")
         return JSONResponse(status_code=503, content=investigacion.resultado_vacio(
             solicitud.tema, "No fue posible consultar la evidencia indexada. Inténtalo de nuevo."
         ))
+
+
+@app.get("/api/salas")
+async def obtener_salas() -> dict[str, Any]:
+    try:
+        lista = await run_in_threadpool(salas.listar_salas)
+        return {"salas": _serializar(lista)}
+    except Exception as error:
+        raise HTTPException(
+            status_code=503,
+            detail=f"No fue posible consultar las salas: {error}",
+        ) from error
+
+
+@app.get("/api/salas/bienvenida")
+async def bienvenida_salas(
+    request: Request,
+    conversacion_id: str | None = Query(default=None),
+) -> dict[str, Any]:
+    try:
+        usuario = await run_in_threadpool(
+            auth.usuario_de_token, request.cookies.get(auth.COOKIE)
+        )
+        nombre = usuario.get("nombre") if usuario else None
+        saludo = (
+            f"Hola, {nombre}. ¿Qué sala quieres visitar hoy?"
+            if nombre
+            else "Hola. ¿Qué sala quieres visitar hoy?"
+        )
+        lista = await run_in_threadpool(salas.listar_salas)
+        opciones = [salas.opcion_sala(s) for s in lista]
+
+        def inicializar_conversacion() -> str:
+            cid, _, _ = agente._cargar_conversacion(
+                conversacion_id, modo_voz=False, usuario_sesion=usuario
+            )
+            try:
+                with conexion() as conn, conn.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        SELECT contenido FROM public.mensajes
+                        WHERE conversacion_id = %s
+                        ORDER BY creado DESC, id DESC
+                        LIMIT 1
+                        """,
+                        (UUID(cid) if isinstance(cid, str) else cid,),
+                    )
+                    ultimo = cursor.fetchone()
+                    if ultimo and "sala quieres visitar hoy" in (ultimo[0] or "").lower():
+                        return cid
+            except Exception:
+                pass
+            agente._guardar_mensaje(cid, "assistant", saludo)
+            return cid
+
+        cid = await run_in_threadpool(inicializar_conversacion)
+        return {
+            "conversacion_id": cid,
+            "mensaje": saludo,
+            "salas_opciones": _serializar(opciones),
+            "sala": None,
+        }
+    except Exception as error:
+        raise HTTPException(
+            status_code=503,
+            detail=f"No fue posible inicializar la bienvenida: {error}",
+        ) from error
 
 
 @app.post("/api/chat")
@@ -221,6 +298,7 @@ async def chat(solicitud: SolicitudChat, request: Request, response: Response) -
             solicitud.texto,
             solicitud.conversacion_id,
             usuario_sesion=usuario_sesion,
+            sala=solicitud.sala,
         )
     except Exception as error:
         resultado = {
@@ -250,6 +328,10 @@ async def chat(solicitud: SolicitudChat, request: Request, response: Response) -
             resultado["audio_wav_base64"] = base64.b64encode(
                 sintetizado["wav_bytes"]
             ).decode("ascii")
+            resultado["voz_id"] = sintetizado["voz_usada"]
+            resultado["voz_usada"] = sintetizado["voz_usada"]
+            if sintetizado.get("aviso"):
+                resultado["aviso"] = sintetizado["aviso"]
             t_tts_ms: int | None = sintetizado["t_tts_ms"]
             resultado["t_tts_ms"] = t_tts_ms
         except Exception as error:
@@ -585,6 +667,65 @@ async def conversacion_actual(request: Request) -> dict[str, Any]:
         raise HTTPException(
             status_code=503, detail=f"No fue posible recuperar el chat: {error}"
         ) from error
+
+
+@app.post("/api/conversacion/{conversacion_id}/adoptar")
+async def adoptar_conversacion(
+    conversacion_id: str, request: Request
+) -> dict[str, bool]:
+    usuario = await run_in_threadpool(
+        auth.usuario_de_token, request.cookies.get(auth.COOKIE)
+    )
+    if usuario is None:
+        raise HTTPException(status_code=401, detail="Debe iniciar sesión.")
+    try:
+        identificador = UUID(conversacion_id)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400, detail="El identificador de conversación no es válido."
+        ) from error
+
+    def ejecutar_adopcion() -> str:
+        with conexion() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT usuario_id FROM public.conversaciones WHERE id = %s",
+                (identificador,),
+            )
+            fila = cursor.fetchone()
+            if fila is None:
+                return "no_existe"
+            usuario_conversacion = fila[0]
+            if usuario_conversacion is None:
+                cursor.execute(
+                    """
+                    UPDATE public.conversaciones
+                    SET usuario_id = %s, actualizada = NOW()
+                    WHERE id = %s
+                    """,
+                    (int(usuario["id"]), identificador),
+                )
+                return "adoptada"
+            if int(usuario_conversacion) == int(usuario["id"]):
+                return "misma"
+            return "otro"
+
+    try:
+        estado = await run_in_threadpool(ejecutar_adopcion)
+    except Exception as error:
+        raise HTTPException(
+            status_code=503,
+            detail=f"No fue posible adoptar la conversación: {error}",
+        ) from error
+
+    if estado == "no_existe":
+        raise HTTPException(status_code=404, detail="No encontré esa conversación.")
+    if estado == "otro":
+        raise HTTPException(
+            status_code=403, detail="La conversación pertenece a otro usuario."
+        )
+    if estado == "adoptada":
+        return {"adoptada": True}
+    return {"adoptada": False}
 
 
 @app.delete("/api/conversacion/{conversacion_id}")
@@ -1161,6 +1302,7 @@ async def voz(
     conversacion_id: str | None = Form(default=None),
     voz_id: str = Form(default="claude"),
     acepto_cpml: bool = Form(default=False),
+    sala: str | None = Form(default=None),
 ) -> dict[str, Any] | JSONResponse:
     inicio_total = perf_counter()
     audio_bytes = await audio.read()
@@ -1193,6 +1335,7 @@ async def voz(
         True,
         transcripcion["t_stt_ms"],
         usuario_sesion=usuario_sesion,
+        sala=sala,
     )
     t_tts_ms: int | None = None
     try:
@@ -1205,6 +1348,10 @@ async def voz(
         audio_base64: str | None = base64.b64encode(
             sintetizado["wav_bytes"]
         ).decode("ascii")
+        resultado["voz_id"] = sintetizado["voz_usada"]
+        resultado["voz_usada"] = sintetizado["voz_usada"]
+        if sintetizado.get("aviso"):
+            resultado["aviso"] = sintetizado["aviso"]
         t_tts_ms = sintetizado["t_tts_ms"]
     except Exception:
         _LOGGER.exception("No se pudo sintetizar la respuesta de /api/voz.")
@@ -1260,9 +1407,21 @@ async def sintetizar_texto(solicitud: SolicitudTTS) -> dict[str, Any]:
         "audio_wav_base64": base64.b64encode(sintetizado["wav_bytes"]).decode("ascii"),
         "t_tts_ms": sintetizado["t_tts_ms"],
         "voz_id": sintetizado["voz_id"],
+        "voz_usada": sintetizado["voz_usada"],
+        "aviso": sintetizado.get("aviso"),
     }
 
 
 @app.get("/api/voces")
 async def voces_disponibles() -> dict[str, Any]:
     return {"voces": tts.listar_voces()}
+
+
+@app.post("/api/voces/{voz_id}/preparar")
+async def preparar_voces(voz_id: str) -> dict[str, Any]:
+    lista = False
+    try:
+        lista = await run_in_threadpool(tts.preparar_voz, voz_id)
+    except Exception as error:
+        _LOGGER.warning("No se pudo preparar la voz %s: %s", voz_id, error)
+    return {"voz_id": voz_id, "lista": lista}

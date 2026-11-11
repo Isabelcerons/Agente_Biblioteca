@@ -4,10 +4,40 @@ import { microfono, detener, play, repetir } from "./iconos.js";
 
 let audioActual = null;
 let contextoAudio = null;
+let fuenteAudioActual = null;
+let analizadorAudioActual = null;
 let cuadroAnimacion = 0;
 let urlAudioActual = null;
 let orbeActual = null;
 let finalizarAudio = null;
+
+window.addEventListener("keydown", (evento) => {
+  if (evento.key === "Escape" && audioActual) {
+    evento.preventDefault();
+    detenerAudioActual();
+  }
+});
+
+async function asegurarContextoAudio() {
+  if (!contextoAudio) {
+    contextoAudio = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (contextoAudio.state === "suspended") {
+    await contextoAudio.resume();
+  }
+  return contextoAudio;
+}
+
+function desconectarAudioAnterior() {
+  if (fuenteAudioActual) {
+    try { fuenteAudioActual.disconnect(); } catch { /* El audio previo ya se liberó. */ }
+    fuenteAudioActual = null;
+  }
+  if (analizadorAudioActual) {
+    try { analizadorAudioActual.disconnect(); } catch { /* El analizador previo ya se liberó. */ }
+    analizadorAudioActual = null;
+  }
+}
 
 export async function procesarAudio(wav, conversacionId, { entradaSegura, alTranscripcion, alEstado, vigente = () => true } = {}) {
   if (entradaSegura) return enviarVoz(wav, conversacionId);
@@ -25,7 +55,7 @@ export async function procesarAudio(wav, conversacionId, { entradaSegura, alTran
   if (!texto) throw new Error("No se detectó voz. Inténtalo de nuevo.");
   alTranscripcion?.(texto);
   alEstado?.("Buscando en el catálogo…");
-  const resultado = await enviarChat(texto, conversacionId, false);
+  const resultado = await enviarChat(texto, conversacionId, true);
   return {
     ...resultado,
     tiempos: { ...resultado.tiempos, t_stt_ms: datos.t_stt_ms ?? resultado.tiempos?.t_stt_ms },
@@ -35,6 +65,7 @@ export async function procesarAudio(wav, conversacionId, { entradaSegura, alTran
 }
 
 export function detenerAudioActual() {
+  window.dispatchEvent(new CustomEvent("voz-agente", { detail: { hablando: false } }));
   finalizarAudio?.(false);
   finalizarAudio = null;
   if (cuadroAnimacion) cancelAnimationFrame(cuadroAnimacion);
@@ -52,10 +83,9 @@ export function detenerAudioActual() {
     audioActual.load();
   }
   audioActual = null;
+  desconectarAudioAnterior();
   if (urlAudioActual) URL.revokeObjectURL(urlAudioActual);
   urlAudioActual = null;
-  if (contextoAudio && contextoAudio.state !== "closed") contextoAudio.close().catch(() => {});
-  contextoAudio = null;
 }
 
 function boton(texto, icono, clase = "btn btn--fantasma") {
@@ -68,15 +98,25 @@ function boton(texto, icono, clase = "btn btn--fantasma") {
 
 export function reproducirRespuesta(contenedor, base64, texto = "") {
   detenerAudioActual();
+  contenedor.querySelectorAll(".orbita-voz").forEach((previo) => previo.remove());
   const controles = document.createElement("div");
   controles.className = "orbita-voz";
   const orbe = document.createElement("span");
   orbe.className = "orbe-voz";
   orbe.setAttribute("aria-label", "La voz del agente está en reposo");
   orbeActual = orbe;
+  const info = document.createElement("div");
+  info.className = "orbita-voz__info";
+  const estadoEtiqueta = document.createElement("span");
+  estadoEtiqueta.className = "orbita-voz__estado";
+  estadoEtiqueta.textContent = "🔊 Agente hablando en vivo";
+  const subtitulo = document.createElement("p");
+  subtitulo.className = "orbita-voz__subtitulo";
+  subtitulo.textContent = texto ? `«${texto.slice(0, 140)}${texto.length > 140 ? "…" : ""}»` : "Reproduciendo respuesta de voz…";
+  info.append(estadoEtiqueta, subtitulo);
   const pausar = boton("Pausar", detener);
   const repetirBoton = boton("Repetir", repetir);
-  controles.append(orbe, pausar, repetirBoton);
+  controles.append(orbe, info, pausar, repetirBoton);
   contenedor.append(controles);
 
   const url = base64
@@ -97,22 +137,27 @@ export function reproducirRespuesta(contenedor, base64, texto = "") {
   audio.addEventListener("ended", () => resolver(true), { once: true });
   audio.addEventListener("error", () => resolver(false), { once: true });
   audioActual = audio;
-  let fuente;
   let analizador;
   let datos;
   const reducido = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  try {
-    contextoAudio = new (window.AudioContext || window.webkitAudioContext)();
-    fuente = contextoAudio.createMediaElementSource(audio);
-    analizador = contextoAudio.createAnalyser();
-    analizador.fftSize = 128;
-    datos = new Uint8Array(analizador.frequencyBinCount);
-    fuente.connect(analizador);
-    analizador.connect(contextoAudio.destination);
-  } catch {
-    contextoAudio = null;
-    fuente = null;
-  }
+  void asegurarContextoAudio().then((contexto) => {
+    if (audioActual !== audio) return;
+    try {
+      desconectarAudioAnterior();
+      const fuente = contexto.createMediaElementSource(audio);
+      analizador = contexto.createAnalyser();
+      analizador.fftSize = 128;
+      datos = new Uint8Array(analizador.frequencyBinCount);
+      fuente.connect(analizador);
+      analizador.connect(contexto.destination);
+      fuenteAudioActual = fuente;
+      analizadorAudioActual = analizador;
+    } catch {
+      analizador = null;
+    }
+  }).catch(() => {
+    analizador = null;
+  });
 
   const animar = () => {
     if (!analizador || !audio || audio.paused) return;
@@ -131,13 +176,15 @@ export function reproducirRespuesta(contenedor, base64, texto = "") {
   const iniciar = async () => {
     if (audioActual !== audio) return;
     try {
-      if (contextoAudio?.state === "suspended") await contextoAudio.resume();
+      await asegurarContextoAudio();
       if (audioActual !== audio) return;
       await audio.play();
-      pausar.innerHTML = `${detener}<span>Pausar</span>`;
+      window.dispatchEvent(new CustomEvent("voz-agente", { detail: { hablando: true } }));
+      pausar.innerHTML = `${detener}<span>Detener</span>`;
       orbe.setAttribute("aria-label", "La voz del agente está hablando");
       animar();
     } catch {
+      window.dispatchEvent(new CustomEvent("voz-agente", { detail: { hablando: false } }));
       resolver(false);
       orbe.setAttribute("aria-label", "No se pudo reproducir el audio");
       pausar.innerHTML = `${play}<span>Escuchar</span>`;
@@ -147,6 +194,7 @@ export function reproducirRespuesta(contenedor, base64, texto = "") {
     if (audio.paused) await iniciar();
     else {
       audio.pause();
+      window.dispatchEvent(new CustomEvent("voz-agente", { detail: { hablando: false } }));
       pausar.innerHTML = `${play}<span>Reanudar</span>`;
       orbe.setAttribute("aria-label", "La voz del agente está pausada");
     }
@@ -156,14 +204,17 @@ export function reproducirRespuesta(contenedor, base64, texto = "") {
     iniciar();
   });
   audio.addEventListener("ended", () => {
+    window.dispatchEvent(new CustomEvent("voz-agente", { detail: { hablando: false } }));
     if (cuadroAnimacion) cancelAnimationFrame(cuadroAnimacion);
     cuadroAnimacion = 0;
     orbe.style.transform = "";
     orbe.style.opacity = "";
     orbe.setAttribute("aria-label", "La voz del agente terminó");
+    estadoEtiqueta.textContent = "✓ Respuesta leída";
     pausar.innerHTML = `${play}<span>Escuchar</span>`;
   });
   audio.addEventListener("error", () => {
+    window.dispatchEvent(new CustomEvent("voz-agente", { detail: { hablando: false } }));
     orbe.setAttribute("aria-label", "No se pudo reproducir el audio");
   }, { once: true });
   repetirBoton.setAttribute("aria-label", texto ? `Repetir respuesta: ${texto.slice(0, 100)}` : "Repetir respuesta");

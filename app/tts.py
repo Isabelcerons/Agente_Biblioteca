@@ -1,7 +1,9 @@
 """Síntesis local con Piper y, opcionalmente, clonación autorizada con XTTS."""
 
+from collections import OrderedDict
 import importlib.util
 import io
+import logging
 import os
 import tempfile
 import threading
@@ -13,11 +15,16 @@ from typing import Any
 from app.config import PIPER_LENGTH_SCALE, PIPER_VOZ, RAIZ
 
 _voces_piper: dict[str, Any] = {}
+_voces_piper_lista: dict[str, bool] = {}
 _modelo_xtts: Any = None
 _candado_carga = threading.Lock()
 _candado_sintesis = threading.Lock()
+_LOGGER = logging.getLogger(__name__)
 _MODELO_SHARVARD = RAIZ / "voces" / "es_ES-sharvard-medium.onnx"
 _EXTENSIONES_AUDIO = {".wav", ".ogg", ".mp3", ".m4a", ".flac", ".opus"}
+_TEXTO_PRUEBA = "Hola, soy el agente de la biblioteca. ¿En qué puedo ayudarte?"
+_MUESTRAS_PRUEBA: OrderedDict[str, bytes] = OrderedDict()
+_MAX_MUESTRAS_PRUEBA = 6
 
 _VOCES = {
     "claude": {
@@ -71,6 +78,7 @@ def listar_voces() -> list[dict[str, Any]]:
             modelo = voz["modelo"]
             disponible = modelo.is_file() and Path(f"{modelo}.json").is_file()
             detalle = "" if disponible else "Descarga el modelo Piper para habilitar esta voz."
+            estado_lista = disponible and _voces_piper_lista.get(identificador, False)
         else:
             referencia = _referencia_personalizada()
             disponible = referencia is not None and importlib.util.find_spec("TTS") is not None
@@ -80,19 +88,27 @@ def listar_voces() -> list[dict[str, Any]]:
                 detalle = "Falta instalar coqui-tts y PyTorch para activar la voz personalizada."
             else:
                 detalle = "El modelo XTTS-v2 se descarga al generar la primera prueba."
+            estado_lista = False
         voces.append({
             "id": identificador,
             "nombre": voz["nombre"],
             "disponible": disponible,
             "detalle": detalle,
             "requiere_cpml": voz["motor"] == "xtts",
+            "lista": estado_lista,
         })
     return voces
 
 
+def marcar_voz_lista(identificador: str, lista: bool) -> None:
+    _voces_piper_lista[identificador] = bool(lista)
+
+
 def cargar_voz() -> Any:
     """Carga la voz Piper configurada para precalentar el servidor."""
-    return _cargar_piper("claude")
+    modelo = _cargar_piper("claude")
+    marcar_voz_lista("claude", modelo is not None)
+    return modelo
 
 
 def _cargar_piper(identificador: str) -> Any:
@@ -114,7 +130,43 @@ def _cargar_piper(identificador: str) -> Any:
 
                 modelo_en_cache = PiperVoice.load(ruta)
                 _voces_piper[clave_modelo] = modelo_en_cache
+    marcar_voz_lista(identificador, True)
     return modelo_en_cache
+
+
+def _calentar_voz_piper(identificador: str) -> bool:
+    """Carga y calienta una voz Piper en segundo plano."""
+    try:
+        inicio = perf_counter()
+        _cargar_piper(identificador)
+        _generar_audio("Hola.", identificador, False)
+        transcurrido = round((perf_counter() - inicio) * 1000)
+        _LOGGER.info("[voz] precargada %s en %s ms", identificador, transcurrido)
+        return True
+    except Exception as error:
+        _voces_piper_lista[identificador] = False
+        _LOGGER.warning("[voz] no se pudo precargar %s: %s", identificador, error)
+        return False
+
+
+def preparar_voces_piper_en_segundo_plano() -> None:
+    """Precarga los otros modelos Piper sin retrasar el arranque del servicio."""
+    for identificador in ("ald", "sharvard_f", "sharvard_m"):
+        if _VOCES.get(identificador, {}).get("motor") != "piper":
+            continue
+        _calentar_voz_piper(identificador)
+
+
+def preparar_voz(identificador: str) -> bool:
+    """Carga una voz Piper y la deja lista; responde al instante al frontend."""
+    if identificador == "personalizada":
+        return False
+    voz = _VOCES.get(identificador)
+    if voz is None or voz["motor"] != "piper":
+        return False
+    if _voces_piper_lista.get(identificador):
+        return True
+    return _calentar_voz_piper(identificador)
 
 
 def _cargar_xtts(acepto_cpml: bool) -> Any:
@@ -199,58 +251,102 @@ def sintetizar(
     voz_id: str = "claude",
     acepto_cpml: bool = False,
 ) -> dict[str, Any]:
-    """Genera un WAV en memoria con la voz seleccionada."""
+    """Genera un WAV y sustituye por Claude las voces solicitadas no disponibles."""
     texto = texto.strip()
     if not texto:
         raise ValueError("El texto para sintetizar no puede estar vacío.")
     texto = texto[:600]
-    if voz_id not in _VOCES:
-        raise ValueError("La voz solicitada no está en la lista permitida.")
+
+    if texto == _TEXTO_PRUEBA and voz_id in _MUESTRAS_PRUEBA:
+        wav_bytes = _MUESTRAS_PRUEBA[voz_id]
+        with wave.open(io.BytesIO(wav_bytes), "rb") as archivo:
+            duracion_s = archivo.getnframes() / archivo.getframerate()
+        return {
+            "wav_bytes": wav_bytes,
+            "t_tts_ms": 0,
+            "duracion_s": duracion_s,
+            "voz_id": voz_id,
+            "voz_usada": voz_id,
+        }
 
     with _candado_sintesis:
         inicio = perf_counter()
-        salida = io.BytesIO()
-        if voz_id == "personalizada":
-            referencia = _referencia_personalizada()
-            if referencia is None:
-                raise FileNotFoundError("No encontré un audio en la carpeta «voz que quiero».")
-            xtts = _cargar_xtts(acepto_cpml)
-            ruta_temporal = _referencia_wav(referencia)
-            try:
-                muestras = xtts.tts(
-                    text=texto,
-                    speaker_wav=ruta_temporal,
-                    language="es",
-                    split_sentences=True,
-                )
-            finally:
-                Path(ruta_temporal).unlink(missing_ok=True)
-            import numpy as np
-
-            pcm = (np.clip(np.asarray(muestras), -1.0, 1.0) * 32767).astype("<i2")
-            with wave.open(salida, "wb") as archivo:
-                archivo.setnchannels(1)
-                archivo.setsampwidth(2)
-                archivo.setframerate(24000)
-                archivo.writeframes(pcm.tobytes())
-        else:
-            modelo = _cargar_piper(voz_id)
-            from piper.config import SynthesisConfig
-
-            syn_config = SynthesisConfig(
-                length_scale=PIPER_LENGTH_SCALE,
-                speaker_id=_VOCES[voz_id]["speaker_id"],
-            )
-            with wave.open(salida, "wb") as archivo:
-                modelo.synthesize_wav(texto, archivo, syn_config=syn_config)
-
+        aviso = None
+        voz_usada = voz_id
+        try:
+            wav_bytes, duracion_s = _generar_audio(texto, voz_id, acepto_cpml)
+        except Exception as error:
+            if voz_id == "claude":
+                raise
+            nombre = _VOCES.get(voz_id, {}).get("nombre", voz_id)
+            _LOGGER.warning("La voz %s no está disponible; se usará Claude: %s", voz_id, error)
+            wav_bytes, duracion_s = _generar_audio(texto, "claude", acepto_cpml)
+            voz_usada = "claude"
+            aviso = f"La voz {nombre} no está disponible; usé la voz predeterminada."
         t_tts_ms = round((perf_counter() - inicio) * 1000)
-        wav_bytes = salida.getvalue()
-        with wave.open(io.BytesIO(wav_bytes), "rb") as archivo:
-            duracion_s = archivo.getnframes() / archivo.getframerate()
-    return {
+    if texto == _TEXTO_PRUEBA:
+        _agregar_muestra_prueba(voz_id, wav_bytes)
+    resultado = {
         "wav_bytes": wav_bytes,
         "t_tts_ms": t_tts_ms,
         "duracion_s": duracion_s,
-        "voz_id": voz_id,
+        "voz_id": voz_usada,
+        "voz_usada": voz_usada,
     }
+    if aviso:
+        resultado["aviso"] = aviso
+    return resultado
+
+
+def _agregar_muestra_prueba(voz_id: str, wav_bytes: bytes) -> None:
+    if voz_id not in _MUESTRAS_PRUEBA:
+        if len(_MUESTRAS_PRUEBA) >= _MAX_MUESTRAS_PRUEBA:
+            _MUESTRAS_PRUEBA.popitem(last=False)
+    else:
+        _MUESTRAS_PRUEBA.move_to_end(voz_id)
+    _MUESTRAS_PRUEBA[voz_id] = wav_bytes
+
+
+def _generar_audio(texto: str, voz_id: str, acepto_cpml: bool) -> tuple[bytes, float]:
+    """Sintetiza una voz concreta; los modelos se reutilizan desde sus cachés."""
+    voz = _VOCES.get(voz_id)
+    if voz is None:
+        raise ValueError("La voz solicitada no está en la lista permitida.")
+    salida = io.BytesIO()
+    if voz_id == "personalizada":
+        referencia = _referencia_personalizada()
+        if referencia is None:
+            raise FileNotFoundError("No encontré un audio en la carpeta «voz que quiero».")
+        xtts = _cargar_xtts(acepto_cpml)
+        ruta_temporal = _referencia_wav(referencia)
+        try:
+            muestras = xtts.tts(
+                text=texto,
+                speaker_wav=ruta_temporal,
+                language="es",
+                split_sentences=True,
+            )
+        finally:
+            Path(ruta_temporal).unlink(missing_ok=True)
+        import numpy as np
+
+        pcm = (np.clip(np.asarray(muestras), -1.0, 1.0) * 32767).astype("<i2")
+        with wave.open(salida, "wb") as archivo:
+            archivo.setnchannels(1)
+            archivo.setsampwidth(2)
+            archivo.setframerate(24000)
+            archivo.writeframes(pcm.tobytes())
+    else:
+        modelo = _cargar_piper(voz_id)
+        from piper.config import SynthesisConfig
+
+        syn_config = SynthesisConfig(
+            length_scale=PIPER_LENGTH_SCALE,
+            speaker_id=voz["speaker_id"],
+        )
+        with wave.open(salida, "wb") as archivo:
+            modelo.synthesize_wav(texto, archivo, syn_config=syn_config)
+    wav_bytes = salida.getvalue()
+    with wave.open(io.BytesIO(wav_bytes), "rb") as archivo:
+        duracion_s = archivo.getnframes() / archivo.getframerate()
+    return wav_bytes, duracion_s

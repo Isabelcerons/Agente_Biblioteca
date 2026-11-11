@@ -110,9 +110,14 @@ def buscar_fragmentos(
 
 
 def buscar_materiales_semantico(
-    consulta: str, k: int = TOP_K
+    consulta: str, k: int = TOP_K, sala_slug: str | None = None
 ) -> tuple[list[dict[str, Any]], dict[str, float]]:
     """Agrupa los mejores resúmenes o reseñas y añade disponibilidad real."""
+    sala_slug = (
+        sala_slug.strip().lower()
+        if sala_slug and sala_slug.strip().lower() not in ("", "todas", "toda", "general", "null", "none")
+        else None
+    )
     inicio = perf_counter()
     vector = Vector(embed_consulta(consulta))
     t_embedding_ms = (perf_counter() - inicio) * 1000
@@ -122,10 +127,15 @@ def buscar_materiales_semantico(
                    d.material_id, 1 - (f.embedding <=> %s::vector) AS similitud
             FROM conocimiento.fragmentos AS f
             JOIN conocimiento.documentos AS d ON d.id = f.documento_id
+            JOIN public.material AS catalogo ON catalogo.id = d.material_id
             WHERE d.tipo = ANY(%s) AND d.material_id IS NOT NULL
+              AND (%s::text IS NULL OR catalogo.sala_id = (
+                  SELECT s.id FROM public.salas AS s WHERE lower(btrim(s.slug)) = lower(btrim(%s))
+              ))
             ORDER BY d.material_id, f.embedding <=> %s::vector
         )
         SELECT v.material_id, v.titulo, v.autor, v.tipo, catalogo.anio,
+               catalogo.tema, catalogo.programa, catalogo.descripcion_corta,
                v.disponibles, v.total, mejores.similitud
         FROM mejores
         JOIN public.v_disponibilidad AS v
@@ -138,7 +148,10 @@ def buscar_materiales_semantico(
     inicio = perf_counter()
     try:
         with conexion() as conn, conn.cursor() as cursor:
-            cursor.execute(sql, (vector, ["resumen_tesis", "resena_libro"], vector, k))
+            cursor.execute(
+                sql,
+                (vector, ["resumen_tesis", "resena_libro"], sala_slug, sala_slug, vector, k),
+            )
             columnas = [columna.name for columna in cursor.description]
             resultados = [dict(zip(columnas, fila, strict=True)) for fila in cursor.fetchall()]
     except PsycopgError as error:
@@ -206,21 +219,29 @@ def buscar_fragmentos_material(
     }
 
 
-def buscar_exacto_sql(texto: str, limite: int = 10) -> list[dict[str, Any]]:
+def buscar_exacto_sql(texto: str, limite: int = 10, sala_slug: str | None = None) -> list[dict[str, Any]]:
     """Busca la cadena literal en títulos o autores, sin interpolar SQL."""
+    sala_slug = (
+        sala_slug.strip().lower()
+        if sala_slug and sala_slug.strip().lower() not in ("", "todas", "toda", "general", "null", "none")
+        else None
+    )
     patron = f"%{texto}%"
     sql = """
         SELECT v.material_id, v.titulo, v.autor, v.tipo, m.anio,
                v.disponibles, v.total
         FROM public.v_disponibilidad AS v
         JOIN public.material AS m ON m.id = v.material_id
-        WHERE v.titulo ILIKE %s OR v.autor ILIKE %s
+        WHERE (v.titulo ILIKE %s OR v.autor ILIKE %s)
+          AND (%s::text IS NULL OR m.sala_id = (
+              SELECT s.id FROM public.salas AS s WHERE lower(btrim(s.slug)) = lower(btrim(%s))
+          ))
         ORDER BY v.titulo
         LIMIT %s
     """
     try:
         with conexion() as conn, conn.cursor() as cursor:
-            cursor.execute(sql, (patron, patron, limite))
+            cursor.execute(sql, (patron, patron, sala_slug, sala_slug, limite))
             columnas = [columna.name for columna in cursor.description]
             return [
                 dict(zip(columnas, fila, strict=True))
